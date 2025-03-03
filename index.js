@@ -18,7 +18,7 @@ const pool = mysql.createPool({
   host: 'northamerica-northeast1-001.proxy.kinsta.app',
   port: 30904,
   user: 'hemlockandoak',
-  password: 'wV0]pW3I*',
+  password: 'jH3&wM0gH2a',
   database: 'referral_program'
 });
 
