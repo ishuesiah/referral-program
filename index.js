@@ -3,6 +3,7 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
+const crypto = require('crypto');
 const app = express();
 
 // Define your referral code generator function here
