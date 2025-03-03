@@ -121,7 +121,7 @@ app.post('/api/referral/signup', async (req, res) => {
       console.log('Signup insert result:', result);
       
       // Construct the referral URL (adjust the base URL as needed)
-      const referralUrl = `https://yourshopifystore.com/?ref=${referralCode}`;
+      const referralUrl = `https://hemlockandoak.com/?ref=${referralCode}`;
       
       return res.status(201).json({
         message: 'User signed up successfully and awarded 5 points!',
