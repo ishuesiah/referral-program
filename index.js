@@ -33,18 +33,18 @@ const pool = mysql.createPool({
     console.log('Available tables:', tables.map(t => Object.values(t)[0]));
     
     // Create the referral_users table to store referral program data
-    const createTableQuery = `
-      CREATE TABLE IF NOT EXISTS referral_users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        points INT DEFAULT 0,
-        reward_level INT DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      );
-    `;
-    await connection.execute(createTableQuery);
-    console.log('Referral users table is set up.');
+    // const createTableQuery = `
+    //   CREATE TABLE IF NOT EXISTS referral_users (
+    //     id INT AUTO_INCREMENT PRIMARY KEY,
+    //     email VARCHAR(255) UNIQUE NOT NULL,
+    //     points INT DEFAULT 0,
+    //     reward_level INT DEFAULT 0,
+    //     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    //     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    //   );
+    // `;
+    // await connection.execute(createTableQuery);
+    // console.log('Referral users table is set up.');
     
     // Debug: show the table structure
     const [columns] = await connection.query('DESCRIBE referral_users');
