@@ -18,7 +18,7 @@ const pool = mysql.createPool({
   database: 'referral_program_db'
 });
 
-// Immediately test the connection and create the referral_users table if it doesn't exist
+// Immediately test the connection and create the necessary tables if they don't exist
 (async function testConnection() {
   try {
     const connection = await pool.getConnection();
@@ -27,25 +27,46 @@ const pool = mysql.createPool({
     // Debug: list available tables
     const [tables] = await connection.query('SHOW TABLES');
     console.log('Available tables:', tables.map(t => Object.values(t)[0]));
-    
-    // Create the referral_users table to store referral program data
-    // const createTableQuery = `
-    //   CREATE TABLE IF NOT EXISTS referral_users (
-    //     id INT AUTO_INCREMENT PRIMARY KEY,
-    //     email VARCHAR(255) UNIQUE NOT NULL,
-    //     points INT DEFAULT 0,
-    //     reward_level INT DEFAULT 0,
-    //     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    //     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    //   );
-    // `;
-    // await connection.execute(createTableQuery);
-    // console.log('Referral users table is set up.');
-    
-    // Debug: show the table structure
-    const [columns] = await connection.query('DESCRIBE referral_users');
-    console.log('Referral_users table structure:');
-    columns.forEach(col => {
+
+    // Create the "users" table
+    const createUsersTableQuery = `
+      CREATE TABLE IF NOT EXISTS users (
+        user_id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        points INT DEFAULT 0,
+        referral_code VARCHAR(50) UNIQUE,
+        referred_by VARCHAR(50) DEFAULT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+    await connection.execute(createUsersTableQuery);
+    console.log('Users table is set up.');
+
+    // Create the "user_actions" table
+    const createUserActionsTableQuery = `
+      CREATE TABLE IF NOT EXISTS user_actions (
+        action_id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        action_type VARCHAR(50) NOT NULL,
+        points_awarded INT DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(user_id)
+      );
+    `;
+    await connection.execute(createUserActionsTableQuery);
+    console.log('User actions table is set up.');
+
+    // Debug: show the "users" table structure
+    const [userColumns] = await connection.query('DESCRIBE users');
+    console.log('Users table structure:');
+    userColumns.forEach(col => {
+      console.log(`  ${col.Field}: ${col.Type} ${col.Null === 'YES' ? 'NULL' : 'NOT NULL'} ${col.Key}`);
+    });
+
+    // Debug: show the "user_actions" table structure
+    const [actionColumns] = await connection.query('DESCRIBE user_actions');
+    console.log('User actions table structure:');
+    actionColumns.forEach(col => {
       console.log(`  ${col.Field}: ${col.Type} ${col.Null === 'YES' ? 'NULL' : 'NOT NULL'} ${col.Key}`);
     });
     
@@ -79,21 +100,20 @@ app.post('/api/referral/signup', async (req, res) => {
     }
     
     // Insert the new user with an initial 5 points and a starting reward level of 1
+    // Adjust your query as needed to work with the new "users" table.
     const sql = `
-      INSERT INTO referral_users (email, points, reward_level)
-      VALUES (?, ?, ?)
+      INSERT INTO users (email, points)
+      VALUES (?, ?)
     `;
     const initialPoints = 5;
-    const initialRewardLevel = 1;
     
     try {
-      const [result] = await pool.execute(sql, [email, initialPoints, initialRewardLevel]);
+      const [result] = await pool.execute(sql, [email, initialPoints]);
       console.log('Signup insert result:', result);
       return res.status(201).json({
         message: 'User signed up successfully and awarded 5 points!',
         userId: result.insertId,
-        points: initialPoints,
-        reward_level: initialRewardLevel
+        points: initialPoints
       });
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY') {
@@ -126,29 +146,33 @@ app.post('/api/referral/award', async (req, res) => {
     const pointsToAdd = 5;
     
     // Retrieve the user
-    const [users] = await pool.execute('SELECT * FROM referral_users WHERE email = ?', [email]);
+    const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
     if (users.length === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
     const user = users[0];
     const newPoints = user.points + pointsToAdd;
     
-    // For this example, assume every 5 points increases the reward level by 1
-    const newRewardLevel = Math.floor(newPoints / 5);
-    
+    // For this example, every action simply adds points; adjust reward logic as needed.
     const updateSql = `
-      UPDATE referral_users
-      SET points = ?, reward_level = ?
+      UPDATE users
+      SET points = ?
       WHERE email = ?
     `;
-    const [updateResult] = await pool.execute(updateSql, [newPoints, newRewardLevel, email]);
+    const [updateResult] = await pool.execute(updateSql, [newPoints, email]);
     console.log('Award update result:', updateResult);
+    
+    // Optionally, record the action in the user_actions table
+    const insertActionSql = `
+      INSERT INTO user_actions (user_id, action_type, points_awarded)
+      VALUES (?, ?, ?)
+    `;
+    await pool.execute(insertActionSql, [user.user_id, action, pointsToAdd]);
     
     return res.json({
       message: `Awarded ${pointsToAdd} points for action "${action}".`,
       email: email,
-      newPoints: newPoints,
-      reward_level: newRewardLevel
+      newPoints: newPoints
     });
   } catch (error) {
     console.error('Error in award endpoint:', error);
@@ -169,7 +193,7 @@ app.get('/api/referral/user/:email', async (req, res) => {
     }
     
     console.log('Fetching referral info for email:', email);
-    const [rows] = await pool.execute('SELECT * FROM referral_users WHERE email = ?', [email]);
+    const [rows] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
     
     if (rows.length === 0) {
       return res.status(404).json({ error: 'User not found.' });
@@ -183,7 +207,7 @@ app.get('/api/referral/user/:email', async (req, res) => {
 });
 
 /********************************************************************
- * Special debug endpoint to verify referral user handling
+ * Special debug endpoint to verify user handling
  * Example: /api/debug/referral-user/user@example.com
  ********************************************************************/
 app.get('/api/debug/referral-user/:email', async (req, res) => {
@@ -191,7 +215,7 @@ app.get('/api/debug/referral-user/:email', async (req, res) => {
     const { email } = req.params;
     console.log('Debug endpoint called for email:', email);
     
-    const [rows] = await pool.execute('SELECT COUNT(*) AS count FROM referral_users WHERE email = ?', [email]);
+    const [rows] = await pool.execute('SELECT COUNT(*) AS count FROM users WHERE email = ?', [email]);
     return res.json({
       received_email: email,
       timestamp: new Date().toISOString(),
