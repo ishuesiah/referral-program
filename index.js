@@ -5,6 +5,12 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const app = express();
 
+// Define your referral code generator function here
+function generateReferralCode() {
+  // Generates a 6-character referral code (you can adjust the byte length as needed)
+  return crypto.randomBytes(3).toString('hex').toUpperCase();
+}
+
 app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: '2mb' }));
@@ -99,21 +105,29 @@ app.post('/api/referral/signup', async (req, res) => {
       return res.status(400).json({ error: 'Email is required.' });
     }
     
-    // Insert the new user with an initial 5 points and a starting reward level of 1
-    // Adjust your query as needed to work with the new "users" table.
-    const sql = `
-      INSERT INTO users (email, points)
-      VALUES (?, ?)
-    `;
+    // Generate a unique referral code
+    const referralCode = generateReferralCode();
     const initialPoints = 5;
     
+    // Insert the new user with email, initial points, and the referral code
+    const sql = `
+      INSERT INTO users (email, points, referral_code)
+      VALUES (?, ?, ?)
+    `;
+    
     try {
-      const [result] = await pool.execute(sql, [email, initialPoints]);
+      const [result] = await pool.execute(sql, [email, initialPoints, referralCode]);
       console.log('Signup insert result:', result);
+      
+      // Construct the referral URL (adjust the base URL as needed)
+      const referralUrl = `https://yourshopifystore.com/?ref=${referralCode}`;
+      
       return res.status(201).json({
         message: 'User signed up successfully and awarded 5 points!',
         userId: result.insertId,
-        points: initialPoints
+        points: initialPoints,
+        referralCode: referralCode,
+        referralUrl: referralUrl
       });
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY') {
@@ -127,6 +141,7 @@ app.post('/api/referral/signup', async (req, res) => {
     return res.status(500).json({ error: 'Server error: ' + error.message });
   }
 });
+
 
 /********************************************************************
  * POST /api/referral/award
