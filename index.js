@@ -3,15 +3,11 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
-
-// Create the Express app
 const app = express();
 
-// Increase the JSON payload size limit (if needed)
-app.use(express.json({ limit: '2mb' }));
-
-// Allow cross-origin requests (e.g., from your Shopify store domain)
 app.use(cors());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '2mb' }));
 
 // Set up the database connection pool using your Kinsta credentials for the referral_program database
 const pool = mysql.createPool({
