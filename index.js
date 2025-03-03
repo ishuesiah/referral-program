@@ -16,7 +16,7 @@ app.use(cors());
 // Set up the database connection pool using your Kinsta credentials for the referral_program database
 const pool = mysql.createPool({
   host: 'northamerica-northeast1-001.proxy.kinsta.app',
-  port: 30904,
+  port: 30387,
   user: 'hemlockandoak',
   password: 'jH3&wM0gH2a',
   database: 'referral_program'
