@@ -19,7 +19,7 @@ const pool = mysql.createPool({
   port: 30387,
   user: 'hemlockandoak',
   password: 'jH3&wM0gH2a',
-  database: 'referral_program'
+  database: 'referral_program_db'
 });
 
 // Immediately test the connection and create the referral_users table if it doesn't exist
