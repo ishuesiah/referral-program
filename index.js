@@ -39,6 +39,7 @@ const pool = mysql.createPool({
     const createUsersTableQuery = `
       CREATE TABLE IF NOT EXISTS users (
         user_id INT AUTO_INCREMENT PRIMARY KEY,
+        first_name VARCHAR(255) DEFAULT NULL,
         email VARCHAR(255) NOT NULL UNIQUE,
         points INT DEFAULT 0,
         referral_code VARCHAR(50) UNIQUE,
@@ -46,6 +47,7 @@ const pool = mysql.createPool({
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `;
+
     await connection.execute(createUsersTableQuery);
     console.log('Users table is set up.');
 
