@@ -102,24 +102,24 @@ app.get('/', (req, res) => {
 app.post('/api/referral/signup', async (req, res) => {
   try {
     console.log('=== REFERRAL SIGNUP ===');
-    const { email } = req.body;
+    const { email, firstName } = req.body;
     
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required.' });
+    if (!email || !firstName) {
+      return res.status(400).json({ error: 'First name and email are required.' });
     }
     
     // Generate a unique referral code
     const referralCode = generateReferralCode();
     const initialPoints = 5;
     
-    // Insert the new user with email, initial points, and the referral code
+    // Insert the new user with first name, email, initial points, and the referral code
     const sql = `
-      INSERT INTO users (email, points, referral_code)
-      VALUES (?, ?, ?)
+      INSERT INTO users (first_name, email, points, referral_code)
+      VALUES (?, ?, ?, ?)
     `;
     
     try {
-      const [result] = await pool.execute(sql, [email, initialPoints, referralCode]);
+      const [result] = await pool.execute(sql, [firstName, email, initialPoints, referralCode]);
       console.log('Signup insert result:', result);
       
       // Construct the referral URL (adjust the base URL as needed)
