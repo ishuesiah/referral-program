@@ -21,24 +21,27 @@ const KLAVIYO_LIST_ID = 'Vc2WdM';
  * Helper function to subscribe a user to your Klaviyo list
  ********************************************************************/
 async function subscribeToKlaviyoList(email, firstName) {
-  // Using the "Add Profiles to List" endpoint
-  const klaviyoUrl = `https://a.klaviyo.com/api/v2/list/${KLAVIYO_LIST_ID}/subscribe`;
+  // Construct the endpoint URL with your list ID
+  const klaviyoUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/relationships/profiles`;
 
-  // Build the payload per Klaviyo's API reference
+  // Build the payload in JSON:API format
   const payload = {
-    profiles: [
+    data: [
       {
-        email: email,
-        first_name: firstName
+        type: "profile",
+        attributes: {
+          email: email,
+          first_name: firstName
+        }
       }
     ]
   };
 
-  // Make the POST request with your API key sent as a Bearer token
+  // Make the POST request with your API key as a Bearer token
   const response = await fetch(klaviyoUrl, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/vnd.api+json',
       'Authorization': `Bearer ${KLAVIYO_API_KEY}`
     },
     body: JSON.stringify(payload)
@@ -47,11 +50,12 @@ async function subscribeToKlaviyoList(email, firstName) {
   if (!response.ok) {
     const errorText = await response.text();
     console.error('Klaviyo subscription error:', errorText);
-    // Optionally, you can throw an error here if needed
+    // Optionally, throw an error if needed
   } else {
     console.log(`Successfully subscribed ${email} to Klaviyo list ${KLAVIYO_LIST_ID}.`);
   }
 }
+
 
 
 
