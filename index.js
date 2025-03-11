@@ -11,6 +11,8 @@ const app = express();
 
 // Your private Klaviyo API key is now securely loaded from the environment
 const KLAVIYO_API_KEY = process.env.KLAVIYO_API_KEY;
+console.log('KLAVIYO_API_KEY:', process.env.KLAVIYO_API_KEY);
+
 
 // The Klaviyo list ID you want to add users to
 const KLAVIYO_LIST_ID = 'Vc2WdM';
