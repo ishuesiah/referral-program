@@ -12,8 +12,7 @@ const app = express();
 // require('dotenv').config();
 
 // Your private Klaviyo API key should be stored securely in an environment variable
-// const KLAVIYO_API_KEY = process.env.KLAVIYO_API_KEY;
-const KLAVIYO_API_KEY = pk_e933763531c3a4f3a9a5b6419e44c6d9a3;
+const KLAVIYO_API_KEY = process.env.KLAVIYO_API_KEY;
 
 // The Klaviyo list ID you want to add users to
 const KLAVIYO_LIST_ID = 'Vc2WdM';
