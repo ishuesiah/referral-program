@@ -19,10 +19,10 @@ const KLAVIYO_LIST_ID = 'Vc2WdM';
  * Helper function to subscribe a user to your Klaviyo list
  ********************************************************************/
 async function subscribeToKlaviyoList(email, firstName) {
-  // Construct the Klaviyo API endpoint using your list ID and API key
-  const klaviyoUrl = `https://a.klaviyo.com/api/v2/list/${KLAVIYO_LIST_ID}/subscribe?api_key=${KLAVIYO_API_KEY}`;
-  
-  // Build the payload for Klaviyo
+  // Use the new endpoint. For example, Klaviyo now supports:
+  // POST https://a.klaviyo.com/api/v2/list/{LIST_ID}/members
+  const klaviyoUrl = `https://a.klaviyo.com/api/v2/list/${KLAVIYO_LIST_ID}/members`;
+
   const payload = {
     profiles: [
       {
@@ -32,21 +32,25 @@ async function subscribeToKlaviyoList(email, firstName) {
     ]
   };
 
-  // Make the POST request to Klaviyo
+  // Note: the API key is now sent as a Bearer token in the Authorization header
   const response = await fetch(klaviyoUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${KLAVIYO_API_KEY}`
+    },
     body: JSON.stringify(payload)
   });
 
   if (!response.ok) {
     const errorText = await response.text();
     console.error('Klaviyo subscription error:', errorText);
-    // We won't throw an error here to allow the signup to succeed even if Klaviyo fails.
+    // Optionally, you might want to throw an error here
   } else {
     console.log(`Successfully subscribed ${email} to Klaviyo list ${KLAVIYO_LIST_ID}.`);
   }
 }
+
 
 /********************************************************************
  * Referral code generator
