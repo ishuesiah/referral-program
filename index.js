@@ -5,13 +5,11 @@ const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
 const crypto = require('crypto');
-const fetch = require('node-fetch'); // <-- Ensure you've installed node-fetch
+const fetch = require('node-fetch'); // Ensure you've installed node-fetch (or use Node 18+ built-in fetch)
+require('dotenv').config(); // Load environment variables from .env
 const app = express();
 
-// Load environment variables (if using a .env file)
-// require('dotenv').config();
-
-// Your private Klaviyo API key should be stored securely in an environment variable
+// Your private Klaviyo API key is now securely loaded from the environment
 const KLAVIYO_API_KEY = process.env.KLAVIYO_API_KEY;
 
 // The Klaviyo list ID you want to add users to
@@ -21,7 +19,7 @@ const KLAVIYO_LIST_ID = 'Vc2WdM';
  * Helper function to subscribe a user to your Klaviyo list
  ********************************************************************/
 async function subscribeToKlaviyoList(email, firstName) {
-  // Construct the Klaviyo API endpoint using your list ID
+  // Construct the Klaviyo API endpoint using your list ID and API key
   const klaviyoUrl = `https://a.klaviyo.com/api/v2/list/${KLAVIYO_LIST_ID}/subscribe?api_key=${KLAVIYO_API_KEY}`;
   
   // Build the payload for Klaviyo
@@ -44,8 +42,7 @@ async function subscribeToKlaviyoList(email, firstName) {
   if (!response.ok) {
     const errorText = await response.text();
     console.error('Klaviyo subscription error:', errorText);
-    // We won't throw an error here unless you want to prevent signups 
-    // from succeeding if Klaviyo fails. For now, just log it.
+    // We won't throw an error here to allow the signup to succeed even if Klaviyo fails.
   } else {
     console.log(`Successfully subscribed ${email} to Klaviyo list ${KLAVIYO_LIST_ID}.`);
   }
@@ -184,16 +181,14 @@ app.post('/api/referral/signup', async (req, res) => {
     const [result] = await pool.execute(sql, [firstName, email, initialPoints, referralCode, referredBy || null]);
     console.log('Signup insert result:', result);
     
-    // After successfully creating the user in your DB, subscribe them to Klaviyo
-    // We do this in a separate function for clarity
+    // Subscribe the new user to Klaviyo
     subscribeToKlaviyoList(email, firstName)
       .catch(err => {
         console.error('Klaviyo subscription error:', err);
-        // We won't fail the entire request if Klaviyo subscription fails,
-        // but we do log the error for debugging.
+        // We log the error but do not fail the signup.
       });
     
-    // Construct the referral URL for the new user (adjust as needed)
+    // Construct the referral URL for the new user
     const referralUrl = `https://www.hemlockandoak.com/pages/email-signup/?ref=${referralCode}`;
     
     return res.status(201).json({
@@ -233,7 +228,7 @@ app.post('/api/referral/award', async (req, res) => {
     }
     const user = users[0];
 
-    // For the "bonus" action, check if points have already been awarded
+    // For the "social_media_follow" action, check if points have already been awarded
     if (action === 'social_media_follow') {
       const [existingBonus] = await pool.execute(
         'SELECT * FROM user_actions WHERE user_id = ? AND action_type = ?',
@@ -244,7 +239,7 @@ app.post('/api/referral/award', async (req, res) => {
       }
     }
     
-    // For simplicity, award 5 points per action (e.g., share, ig, fb, bonus)
+    // Award 5 points per action
     const pointsToAdd = 5;
     const newPoints = user.points + pointsToAdd;
     
@@ -321,7 +316,7 @@ app.get('/api/debug/referral-user/:email', async (req, res) => {
 /********************************************************************
  * Start the server
  ********************************************************************/
-const PORT = process.env.PORT || 3001; // Use a different port if needed
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Referral Program API listening on port ${PORT}`);
   console.log(`Server started at: ${new Date().toISOString()}`);
