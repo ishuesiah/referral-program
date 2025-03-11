@@ -1,22 +1,73 @@
-// referral-server.js
-
+/********************************************************************
+ * referral-server.js
+ ********************************************************************/
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
 const crypto = require('crypto');
+const fetch = require('node-fetch'); // <-- Ensure you've installed node-fetch
 const app = express();
 
-// Define your referral code generator function here
+// Load environment variables (if using a .env file)
+// require('dotenv').config();
+
+// Your private Klaviyo API key should be stored securely in an environment variable
+// const KLAVIYO_API_KEY = process.env.KLAVIYO_API_KEY;
+const KLAVIYO_API_KEY = pk_e933763531c3a4f3a9a5b6419e44c6d9a3;
+
+// The Klaviyo list ID you want to add users to
+const KLAVIYO_LIST_ID = 'Vc2WdM';
+
+/********************************************************************
+ * Helper function to subscribe a user to your Klaviyo list
+ ********************************************************************/
+async function subscribeToKlaviyoList(email, firstName) {
+  // Construct the Klaviyo API endpoint using your list ID
+  const klaviyoUrl = `https://a.klaviyo.com/api/v2/list/${KLAVIYO_LIST_ID}/subscribe?api_key=${KLAVIYO_API_KEY}`;
+  
+  // Build the payload for Klaviyo
+  const payload = {
+    profiles: [
+      {
+        email: email,
+        first_name: firstName
+      }
+    ]
+  };
+
+  // Make the POST request to Klaviyo
+  const response = await fetch(klaviyoUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Klaviyo subscription error:', errorText);
+    // We won't throw an error here unless you want to prevent signups 
+    // from succeeding if Klaviyo fails. For now, just log it.
+  } else {
+    console.log(`Successfully subscribed ${email} to Klaviyo list ${KLAVIYO_LIST_ID}.`);
+  }
+}
+
+/********************************************************************
+ * Referral code generator
+ ********************************************************************/
 function generateReferralCode() {
   // Generates a 6-character referral code (you can adjust the byte length as needed)
   return crypto.randomBytes(3).toString('hex').toUpperCase();
 }
 
+/********************************************************************
+ * Express app setup
+ ********************************************************************/
 app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: '2mb' }));
 
-// Set up the database connection pool using your Kinsta credentials for the referral_program database
+// Set up the database connection pool
 const pool = mysql.createPool({
   host: 'northamerica-northeast1-001.proxy.kinsta.app',
   port: 30387,
@@ -25,7 +76,9 @@ const pool = mysql.createPool({
   database: 'referral_program_db'
 });
 
-// Immediately test the connection and create the necessary tables if they don't exist
+/********************************************************************
+ * Immediately test the connection and create the necessary tables if they don't exist
+ ********************************************************************/
 (async function testConnection() {
   try {
     const connection = await pool.getConnection();
@@ -47,7 +100,6 @@ const pool = mysql.createPool({
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `;
-
     await connection.execute(createUsersTableQuery);
     console.log('Users table is set up.');
 
@@ -96,8 +148,9 @@ app.get('/', (req, res) => {
 /********************************************************************
  * POST /api/referral/signup
  * Registers a new referral user.
- * Expects a JSON body with at least { "email": "user@example.com" }
- * Awards 5 points (initial sign-up bonus) and sets reward_level to 1.
+ * Expects { "email": "user@example.com", "firstName": "John", "referredBy": "ABC123" }
+ * Awards 5 points on signup and (optionally) 5 points to the referrer if referredBy is valid.
+ * Also subscribes the new user to Klaviyo.
  ********************************************************************/
 app.post('/api/referral/signup', async (req, res) => {
   try {
@@ -129,9 +182,17 @@ app.post('/api/referral/signup', async (req, res) => {
       INSERT INTO users (first_name, email, points, referral_code, referred_by)
       VALUES (?, ?, ?, ?, ?)
     `;
-    
     const [result] = await pool.execute(sql, [firstName, email, initialPoints, referralCode, referredBy || null]);
     console.log('Signup insert result:', result);
+    
+    // After successfully creating the user in your DB, subscribe them to Klaviyo
+    // We do this in a separate function for clarity
+    subscribeToKlaviyoList(email, firstName)
+      .catch(err => {
+        console.error('Klaviyo subscription error:', err);
+        // We won't fail the entire request if Klaviyo subscription fails,
+        // but we do log the error for debugging.
+      });
     
     // Construct the referral URL for the new user (adjust as needed)
     const referralUrl = `https://www.hemlockandoak.com/pages/email-signup/?ref=${referralCode}`;
@@ -152,11 +213,10 @@ app.post('/api/referral/signup', async (req, res) => {
   }
 });
 
-
 /********************************************************************
  * POST /api/referral/award
  * Adds referral points for additional actions.
- * Expects a JSON body with { "email": "user@example.com", "action": "share" }
+ * Expects { "email": "user@example.com", "action": "share" }
  * Currently, each action awards 5 points.
  ********************************************************************/
 app.post('/api/referral/award', async (req, res) => {
@@ -211,7 +271,6 @@ app.post('/api/referral/award', async (req, res) => {
     return res.status(500).json({ error: 'Server error: ' + error.message });
   }
 });
-
 
 /********************************************************************
  * GET /api/referral/user/:email
