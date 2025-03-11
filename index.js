@@ -167,27 +167,34 @@ app.post('/api/referral/award', async (req, res) => {
       return res.status(400).json({ error: 'Email and action are required.' });
     }
     
-    // For simplicity, award 5 points per action (e.g., share, ig, fb)
-    const pointsToAdd = 5;
-    
     // Retrieve the user
     const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
     if (users.length === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
     const user = users[0];
+
+    // For the "bonus" action, check if points have already been awarded
+    if (action === 'bonus') {
+      const [existingBonus] = await pool.execute(
+        'SELECT * FROM user_actions WHERE user_id = ? AND action_type = ?',
+        [user.user_id, action]
+      );
+      if (existingBonus.length > 0) {
+        return res.status(400).json({ error: 'Bonus points already claimed.' });
+      }
+    }
+    
+    // For simplicity, award 5 points per action (e.g., share, ig, fb, bonus)
+    const pointsToAdd = 5;
     const newPoints = user.points + pointsToAdd;
     
-    // For this example, every action simply adds points; adjust reward logic as needed.
-    const updateSql = `
-      UPDATE users
-      SET points = ?
-      WHERE email = ?
-    `;
-    const [updateResult] = await pool.execute(updateSql, [newPoints, email]);
-    console.log('Award update result:', updateResult);
-    
-    // Optionally, record the action in the user_actions table
+    // Update the user's points
+    const updateSql = `UPDATE users SET points = ? WHERE email = ?`;
+    await pool.execute(updateSql, [newPoints, email]);
+    console.log('Award update result for', email);
+
+    // Record the action in the user_actions table
     const insertActionSql = `
       INSERT INTO user_actions (user_id, action_type, points_awarded)
       VALUES (?, ?, ?)
@@ -204,6 +211,7 @@ app.post('/api/referral/award', async (req, res) => {
     return res.status(500).json({ error: 'Server error: ' + error.message });
   }
 });
+
 
 /********************************************************************
  * GET /api/referral/user/:email
