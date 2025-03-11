@@ -181,7 +181,7 @@ app.post('/api/referral/award', async (req, res) => {
         [user.user_id, action]
       );
       if (existingBonus.length > 0) {
-        return res.status(400).json({ error: 'Bonus points already claimed.' });
+        return res.status(400).json({ error: 'Points already claimed.' });
       }
     }
     
