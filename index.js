@@ -38,10 +38,7 @@ async function subscribeToKlaviyoList(email, firstName) {
   };
 
   // Set the REVISION header. You can either use a constant date
-  // or calculate today's date in YYYY-MM-DD format:
-  const revisionHeader = new Date().toISOString().split('T')[0]; // e.g., "2023-03-14"
-  // Alternatively, if Klaviyo expects a specific revision date, use that:
-  // const revisionHeader = '2023-03-01';
+ const revisionHeader = '2023-12-15';
 
   // Make the POST request with the required headers
   const response = await fetch(klaviyoUrl, {
