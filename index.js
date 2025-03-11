@@ -102,46 +102,53 @@ app.get('/', (req, res) => {
 app.post('/api/referral/signup', async (req, res) => {
   try {
     console.log('=== REFERRAL SIGNUP ===');
-    const { email, firstName } = req.body;
+    const { email, firstName, referredBy } = req.body;
     
     if (!email || !firstName) {
       return res.status(400).json({ error: 'First name and email are required.' });
     }
     
-    // Generate a unique referral code
+    // Generate a unique referral code for the new user
     const referralCode = generateReferralCode();
     const initialPoints = 5;
     
-    // Insert the new user with first name, email, initial points, and the referral code
+    // If a referral code was provided, try to find the original user and award them 5 points
+    if (referredBy) {
+      const [referrerRows] = await pool.execute('SELECT * FROM users WHERE referral_code = ?', [referredBy]);
+      if (referrerRows.length > 0) {
+        // Update the original user's points by adding 5
+        await pool.execute('UPDATE users SET points = points + 5 WHERE referral_code = ?', [referredBy]);
+        console.log(`Awarded 5 bonus points to the user with referral code ${referredBy}`);
+      } else {
+        console.log('Referral code provided does not match any existing user.');
+      }
+    }
+    
+    // Insert the new user including the referred_by field (if provided)
     const sql = `
-      INSERT INTO users (first_name, email, points, referral_code)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO users (first_name, email, points, referral_code, referred_by)
+      VALUES (?, ?, ?, ?, ?)
     `;
     
-    try {
-      const [result] = await pool.execute(sql, [firstName, email, initialPoints, referralCode]);
-      console.log('Signup insert result:', result);
-      
-      // Construct the referral URL (adjust the base URL as needed)
-      const referralUrl = `https://www.hemlockandoak.com/pages/email-signup/?ref=${referralCode}`;
-      
-      return res.status(201).json({
-        message: 'User signed up successfully and awarded 5 points!',
-        userId: result.insertId,
-        points: initialPoints,
-        referralCode: referralCode,
-        referralUrl: referralUrl
-      });
-    } catch (err) {
-      if (err.code === 'ER_DUP_ENTRY') {
-        return res.status(409).json({ error: 'User already exists.' });
-      }
-      console.error('Database error during signup:', err);
-      return res.status(500).json({ error: 'Database error: ' + err.message });
+    const [result] = await pool.execute(sql, [firstName, email, initialPoints, referralCode, referredBy || null]);
+    console.log('Signup insert result:', result);
+    
+    // Construct the referral URL for the new user (adjust as needed)
+    const referralUrl = `https://www.hemlockandoak.com/pages/email-signup/?ref=${referralCode}`;
+    
+    return res.status(201).json({
+      message: 'User signed up successfully and awarded 5 points!',
+      userId: result.insertId,
+      points: initialPoints,
+      referralCode: referralCode,
+      referralUrl: referralUrl
+    });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'User already exists.' });
     }
-  } catch (error) {
-    console.error('Error in signup endpoint:', error);
-    return res.status(500).json({ error: 'Server error: ' + error.message });
+    console.error('Database error during signup:', err);
+    return res.status(500).json({ error: 'Database error: ' + err.message });
   }
 });
 
