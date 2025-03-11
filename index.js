@@ -235,7 +235,7 @@ app.post('/api/referral/award', async (req, res) => {
     const user = users[0];
 
     // For the "bonus" action, check if points have already been awarded
-    if (action === 'bonus') {
+    if (action === 'social_media_follow') {
       const [existingBonus] = await pool.execute(
         'SELECT * FROM user_actions WHERE user_id = ? AND action_type = ?',
         [user.user_id, action]
