@@ -37,12 +37,19 @@ async function subscribeToKlaviyoList(email, firstName) {
     ]
   };
 
-  // Make the POST request with the correct Authorization header
+  // Set the REVISION header. You can either use a constant date
+  // or calculate today's date in YYYY-MM-DD format:
+  const revisionHeader = new Date().toISOString().split('T')[0]; // e.g., "2023-03-14"
+  // Alternatively, if Klaviyo expects a specific revision date, use that:
+  // const revisionHeader = '2023-03-01';
+
+  // Make the POST request with the required headers
   const response = await fetch(klaviyoUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/vnd.api+json',
-      'Authorization': `Klaviyo-API-Key ${KLAVIYO_API_KEY}`
+      'Authorization': `Klaviyo-API-Key ${KLAVIYO_API_KEY}`,
+      'REVISION': revisionHeader
     },
     body: JSON.stringify(payload)
   });
@@ -50,13 +57,10 @@ async function subscribeToKlaviyoList(email, firstName) {
   if (!response.ok) {
     const errorText = await response.text();
     console.error('Klaviyo subscription error:', errorText);
-    // Optionally, throw an error here if you want to stop the signup process on failure
   } else {
     console.log(`Successfully subscribed ${email} to Klaviyo list ${KLAVIYO_LIST_ID}.`);
   }
 }
-
-
 
 
 /********************************************************************
