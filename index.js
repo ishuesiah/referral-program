@@ -19,15 +19,14 @@ const KLAVIYO_LIST_ID = 'Vc2WdM';
 /********************************************************************
  * Helper function to create a Klaviyo profile
  ********************************************************************/
-async function createKlaviyoProfile(email, firstName, lastName) {
+async function createKlaviyoProfile(email, firstName) {
   const klaviyoCreateProfileUrl = 'https://a.klaviyo.com/api/profiles';
   const payload = {
     data: {
       type: "profile",
       attributes: {
         email: email,
-        first_name: firstName,
-        last_name: lastName
+        first_name: firstName
       }
     }
   };
@@ -39,7 +38,7 @@ async function createKlaviyoProfile(email, firstName, lastName) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/vnd.api+json',
-      'Authorization': `Klaviyo-API-Key ${KLAVIYO_API_KEY}`,
+      'Authorization': Klaviyo-API-Key ${KLAVIYO_API_KEY},
       'REVISION': revisionHeader
     },
     body: JSON.stringify(payload)
@@ -70,7 +69,7 @@ async function createKlaviyoProfile(email, firstName, lastName) {
  * Helper function to add an existing Klaviyo profile to a list
  ********************************************************************/
 async function addProfileToList(klaviyoProfileId, email) {
-  const klaviyoUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/relationships/profiles`;
+  const klaviyoUrl = https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/relationships/profiles;
   const payload = {
     data: [
       {
@@ -86,7 +85,7 @@ async function addProfileToList(klaviyoProfileId, email) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/vnd.api+json',
-      'Authorization': `Klaviyo-API-Key ${KLAVIYO_API_KEY}`,
+      'Authorization': Klaviyo-API-Key ${KLAVIYO_API_KEY},
       'REVISION': revisionHeader
     },
     body: JSON.stringify(payload)
@@ -96,19 +95,20 @@ async function addProfileToList(klaviyoProfileId, email) {
     const errorText = await response.text();
     console.error('Klaviyo add-to-list error:', errorText);
   } else {
-    console.log(`Successfully added ${email} (profile id: ${klaviyoProfileId}) to Klaviyo list ${KLAVIYO_LIST_ID}.`);
+    console.log(Successfully added ${email} (profile id: ${klaviyoProfileId}) to Klaviyo list ${KLAVIYO_LIST_ID}.);
   }
 }
+
 
 /********************************************************************
  * Combined function to ensure the profile exists and is added to the list
  ********************************************************************/
-async function subscribeToKlaviyoList(email, firstName, lastName) {
+async function subscribeToKlaviyoList(email, firstName) {
   let klaviyoProfileId;
   try {
     // Try to create the profile first. If it already exists, the duplicate id is returned.
-    klaviyoProfileId = await createKlaviyoProfile(email, firstName, lastName);
-    console.log(`Created or retrieved Klaviyo profile with id: ${klaviyoProfileId}`);
+    klaviyoProfileId = await createKlaviyoProfile(email, firstName);
+    console.log(Created or retrieved Klaviyo profile with id: ${klaviyoProfileId});
   } catch (error) {
     console.error('Error creating Klaviyo profile:', error);
     return;
@@ -154,7 +154,7 @@ const pool = mysql.createPool({
     console.log('Available tables:', tables.map(t => Object.values(t)[0]));
 
     // Create the "users" table
-    const createUsersTableQuery = `
+    const createUsersTableQuery = 
       CREATE TABLE IF NOT EXISTS users (
         user_id INT AUTO_INCREMENT PRIMARY KEY,
         first_name VARCHAR(255) DEFAULT NULL,
@@ -165,13 +165,13 @@ const pool = mysql.createPool({
         referred_by VARCHAR(50) DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
-    `;
+    ;
 
     await connection.execute(createUsersTableQuery);
     console.log('Users table is set up.');
 
     // Create the "user_actions" table
-    const createUserActionsTableQuery = `
+    const createUserActionsTableQuery = 
       CREATE TABLE IF NOT EXISTS user_actions (
         action_id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
@@ -180,7 +180,7 @@ const pool = mysql.createPool({
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(user_id)
       );
-    `;
+    ;
     await connection.execute(createUserActionsTableQuery);
     console.log('User actions table is set up.');
 
@@ -188,14 +188,14 @@ const pool = mysql.createPool({
     const [userColumns] = await connection.query('DESCRIBE users');
     console.log('Users table structure:');
     userColumns.forEach(col => {
-      console.log(`  ${col.Field}: ${col.Type} ${col.Null === 'YES' ? 'NULL' : 'NOT NULL'} ${col.Key}`);
+      console.log(  ${col.Field}: ${col.Type} ${col.Null === 'YES' ? 'NULL' : 'NOT NULL'} ${col.Key});
     });
 
     // Debug: show the "user_actions" table structure
     const [actionColumns] = await connection.query('DESCRIBE user_actions');
     console.log('User actions table structure:');
     actionColumns.forEach(col => {
-      console.log(`  ${col.Field}: ${col.Type} ${col.Null === 'YES' ? 'NULL' : 'NOT NULL'} ${col.Key}`);
+      console.log(  ${col.Field}: ${col.Type} ${col.Null === 'YES' ? 'NULL' : 'NOT NULL'} ${col.Key});
     });
     
     connection.release();
@@ -215,17 +215,17 @@ app.get('/', (req, res) => {
 /********************************************************************
  * POST /api/referral/signup
  * Registers a new referral user.
- * Expects { "email": "user@example.com", "firstName": "John", "lastName": "Doe", "referredBy": "ABC123" }
+ * Expects { "email": "user@example.com", "firstName": "John", "referredBy": "ABC123" }
  * Awards 5 points on signup and (optionally) 5 points to the referrer if referredBy is valid.
  * Also subscribes the new user to Klaviyo.
  ********************************************************************/
 app.post('/api/referral/signup', async (req, res) => {
   try {
     console.log('=== REFERRAL SIGNUP ===');
-    const { email, firstName, lastName, referredBy } = req.body;
+    const { email, firstName, referredBy } = req.body;
     
-    if (!email || !firstName || !lastName) {
-      return res.status(400).json({ error: 'First name, last name and email are required.' });
+    if (!email || !firstName) {
+      return res.status(400).json({ error: 'First name and email are required.' });
     }
     
     // Generate a unique referral code for the new user
@@ -237,28 +237,28 @@ app.post('/api/referral/signup', async (req, res) => {
       const [referrerRows] = await pool.execute('SELECT * FROM users WHERE referral_code = ?', [referredBy]);
       if (referrerRows.length > 0) {
         await pool.execute('UPDATE users SET points = points + 5 WHERE referral_code = ?', [referredBy]);
-        console.log(`Awarded 5 bonus points to the user with referral code ${referredBy}`);
+        console.log(Awarded 5 bonus points to the user with referral code ${referredBy});
       } else {
         console.log('Referral code provided does not match any existing user.');
       }
     }
     
-    // Insert the new user including the last_name field
-    const sql = `
-      INSERT INTO users (first_name, last_name, email, points, referral_code, referred_by)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `;
-    const [result] = await pool.execute(sql, [firstName, lastName, email, initialPoints, referralCode, referredBy || null]);
+    // Insert the new user including the referred_by field (if provided)
+    const sql = 
+      INSERT INTO users (first_name, email, points, referral_code, referred_by)
+      VALUES (?, ?, ?, ?, ?)
+    ;
+    const [result] = await pool.execute(sql, [firstName, email, initialPoints, referralCode, referredBy || null]);
     console.log('Signup insert result:', result);
     
     // Subscribe the new user to Klaviyo (create profile & add to list)
-    subscribeToKlaviyoList(email, firstName, lastName)
+    subscribeToKlaviyoList(email, firstName)
       .catch(err => {
         console.error('Klaviyo subscription error:', err);
       });
     
     // Construct the referral URL for the new user
-    const referralUrl = `https://www.hemlockandoak.com/pages/email-signup/?ref=${referralCode}`;
+    const referralUrl = https://www.hemlockandoak.com/pages/email-signup/?ref=${referralCode};
     
     return res.status(201).json({
       message: 'User signed up successfully and awarded 5 points!',
@@ -309,18 +309,18 @@ app.post('/api/referral/award', async (req, res) => {
     const pointsToAdd = 5;
     const newPoints = user.points + pointsToAdd;
     
-    const updateSql = `UPDATE users SET points = ? WHERE email = ?`;
+    const updateSql = UPDATE users SET points = ? WHERE email = ?;
     await pool.execute(updateSql, [newPoints, email]);
     console.log('Award update result for', email);
 
-    const insertActionSql = `
+    const insertActionSql = 
       INSERT INTO user_actions (user_id, action_type, points_awarded)
       VALUES (?, ?, ?)
-    `;
+    ;
     await pool.execute(insertActionSql, [user.user_id, action, pointsToAdd]);
     
     return res.json({
-      message: `Awarded ${pointsToAdd} points for action "${action}".`,
+      message: Awarded ${pointsToAdd} points for action "${action}".,
       email: email,
       newPoints: newPoints
     });
@@ -382,6 +382,6 @@ app.get('/api/debug/referral-user/:email', async (req, res) => {
  ********************************************************************/
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`Referral Program API listening on port ${PORT}`);
-  console.log(`Server started at: ${new Date().toISOString()}`);
+  console.log(Referral Program API listening on port ${PORT});
+  console.log(Server started at: ${new Date().toISOString()});
 });
