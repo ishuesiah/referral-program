@@ -20,27 +20,53 @@ const KLAVIYO_LIST_ID = 'Vc2WdM';
 /********************************************************************
  * Helper function to subscribe a user to your Klaviyo list
  ********************************************************************/
-async function subscribeToKlaviyoList(email, firstName) {
-  // Construct the endpoint URL using your list ID
-  const klaviyoUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/relationships/profiles`;
-
-  // Build the payload in JSON:API format per Klaviyo documentation
+// Helper function to create a Klaviyo profile
+async function createKlaviyoProfile(email, firstName) {
+  const klaviyoCreateProfileUrl = 'https://a.klaviyo.com/api/profiles';
   const payload = {
-    data: [
-      {
-        type: "profile",
-        attributes: {
-          email: email,
-          first_name: firstName
-        }
+    data: {
+      type: "profile",
+      attributes: {
+        email: email,
+        first_name: firstName
       }
-    ]
+    }
   };
 
-  // Set the REVISION header. You can either use a constant date
- const revisionHeader = '2023-12-15';
+  // Use a fixed revision date per Klaviyo documentation
+  const revisionHeader = '2023-12-15'; // Update this as required by Klaviyo's docs
 
-  // Make the POST request with the required headers
+  const response = await fetch(klaviyoCreateProfileUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/vnd.api+json',
+      'Authorization': `Klaviyo-API-Key ${KLAVIYO_API_KEY}`,
+      'REVISION': revisionHeader
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error('Klaviyo create profile error: ' + errorText);
+  }
+  const result = await response.json();
+  // Assuming the result follows JSON:API format and returns the profile id under data.id
+  return result.data.id;
+}
+
+// Helper function to add an existing Klaviyo profile to a list
+async function addProfileToList(klaviyoProfileId, email) {
+  const klaviyoUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/relationships/profiles`;
+  const payload = {
+    data: {
+      type: "profile",
+      id: klaviyoProfileId
+    }
+  };
+
+  const revisionHeader = '2023-12-15'; // Use the valid revision date per documentation
+
   const response = await fetch(klaviyoUrl, {
     method: 'POST',
     headers: {
@@ -50,6 +76,33 @@ async function subscribeToKlaviyoList(email, firstName) {
     },
     body: JSON.stringify(payload)
   });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Klaviyo add-to-list error:', errorText);
+  } else {
+    console.log(`Successfully added ${email} (profile id: ${klaviyoProfileId}) to Klaviyo list ${KLAVIYO_LIST_ID}.`);
+  }
+}
+
+// Combined function to ensure the profile exists and is added to the list
+async function subscribeToKlaviyoList(email, firstName) {
+  let klaviyoProfileId;
+  try {
+    // Try to create the profile first
+    klaviyoProfileId = await createKlaviyoProfile(email, firstName);
+    console.log(`Created Klaviyo profile with id: ${klaviyoProfileId}`);
+  } catch (error) {
+    // If profile creation fails, log the error.
+    // Depending on your flow, you might want to handle the error differently (e.g., check if it already exists).
+    console.error('Error creating Klaviyo profile:', error);
+    return;
+  }
+
+  // Now add the profile to the list using the obtained profile id
+  await addProfileToList(klaviyoProfileId, email);
+}
+
 
   if (!response.ok) {
     const errorText = await response.text();
