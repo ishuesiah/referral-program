@@ -46,10 +46,22 @@ async function createKlaviyoProfile(email, firstName) {
 
   if (!response.ok) {
     const errorText = await response.text();
+    try {
+      const errorJSON = JSON.parse(errorText);
+      // If the profile already exists, Klaviyo returns a 409 with duplicate_profile error code.
+      if (errorJSON.errors &&
+          errorJSON.errors[0].code === "duplicate_profile" &&
+          errorJSON.errors[0].meta &&
+          errorJSON.errors[0].meta.duplicate_profile_id) {
+        console.log("Profile already exists. Using duplicate profile id: " + errorJSON.errors[0].meta.duplicate_profile_id);
+        return errorJSON.errors[0].meta.duplicate_profile_id;
+      }
+    } catch (e) {
+      // If parsing fails, fall through.
+    }
     throw new Error('Klaviyo create profile error: ' + errorText);
   }
   const result = await response.json();
-  // Assuming the result follows JSON:API format and returns the profile id under data.id
   return result.data.id;
 }
 
@@ -91,9 +103,9 @@ async function addProfileToList(klaviyoProfileId, email) {
 async function subscribeToKlaviyoList(email, firstName) {
   let klaviyoProfileId;
   try {
-    // Try to create the profile first
+    // Try to create the profile first. If it already exists, the duplicate id is returned.
     klaviyoProfileId = await createKlaviyoProfile(email, firstName);
-    console.log(`Created Klaviyo profile with id: ${klaviyoProfileId}`);
+    console.log(`Created or retrieved Klaviyo profile with id: ${klaviyoProfileId}`);
   } catch (error) {
     console.error('Error creating Klaviyo profile:', error);
     return;
@@ -106,6 +118,7 @@ async function subscribeToKlaviyoList(email, firstName) {
  * Referral code generator
  ********************************************************************/
 function generateReferralCode() {
+  // Generates a 6-character referral code
   return crypto.randomBytes(3).toString('hex').toUpperCase();
 }
 
