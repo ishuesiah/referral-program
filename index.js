@@ -99,7 +99,6 @@ async function addProfileToList(klaviyoProfileId, email) {
   }
 }
 
-
 /********************************************************************
  * Combined function to ensure the profile exists and is added to the list
  ********************************************************************/
@@ -153,12 +152,12 @@ const pool = mysql.createPool({
     const [tables] = await connection.query('SHOW TABLES');
     console.log('Available tables:', tables.map(t => Object.values(t)[0]));
 
-    // Create the "users" table
+    // Create the "users" table with a new column for Shopify customer ID
     const createUsersTableQuery = `
       CREATE TABLE IF NOT EXISTS users (
         user_id INT AUTO_INCREMENT PRIMARY KEY,
+        shopify_customer_id VARCHAR(255) DEFAULT NULL,
         first_name VARCHAR(255) DEFAULT NULL,
-        last_name VARCHAR(255) DEFAULT NULL,
         email VARCHAR(255) NOT NULL UNIQUE,
         points INT DEFAULT 0,
         referral_code VARCHAR(50) UNIQUE,
@@ -166,7 +165,6 @@ const pool = mysql.createPool({
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `;
-
     await connection.execute(createUsersTableQuery);
     console.log('Users table is set up.');
 
@@ -215,14 +213,14 @@ app.get('/', (req, res) => {
 /********************************************************************
  * POST /api/referral/signup
  * Registers a new referral user.
- * Expects { "email": "user@example.com", "firstName": "John", "referredBy": "ABC123" }
+ * Expects { "email": "user@example.com", "firstName": "John", "referredBy": "ABC123", "shopifyCustomerId": "12345" }
  * Awards 5 points on signup and (optionally) 5 points to the referrer if referredBy is valid.
  * Also subscribes the new user to Klaviyo.
  ********************************************************************/
 app.post('/api/referral/signup', async (req, res) => {
   try {
     console.log('=== REFERRAL SIGNUP ===');
-    const { email, firstName, referredBy } = req.body;
+    const { email, firstName, referredBy, shopifyCustomerId } = req.body;
     
     if (!email || !firstName) {
       return res.status(400).json({ error: 'First name and email are required.' });
@@ -243,12 +241,12 @@ app.post('/api/referral/signup', async (req, res) => {
       }
     }
     
-    // Insert the new user including the referred_by field (if provided)
+    // Insert the new user including the shopify_customer_id (if provided)
     const sql = `
-      INSERT INTO users (first_name, email, points, referral_code, referred_by)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO users (first_name, email, points, referral_code, referred_by, shopify_customer_id)
+      VALUES (?, ?, ?, ?, ?, ?)
     `;
-    const [result] = await pool.execute(sql, [firstName, email, initialPoints, referralCode, referredBy || null]);
+    const [result] = await pool.execute(sql, [firstName, email, initialPoints, referralCode, referredBy || null, shopifyCustomerId || null]);
     console.log('Signup insert result:', result);
     
     // Subscribe the new user to Klaviyo (create profile & add to list)
