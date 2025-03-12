@@ -13,14 +13,12 @@ const app = express();
 const KLAVIYO_API_KEY = process.env.KLAVIYO_API_KEY;
 console.log('KLAVIYO_API_KEY:', process.env.KLAVIYO_API_KEY);
 
-
 // The Klaviyo list ID you want to add users to
 const KLAVIYO_LIST_ID = 'Vc2WdM';
 
 /********************************************************************
- * Helper function to subscribe a user to your Klaviyo list
+ * Helper function to create a Klaviyo profile
  ********************************************************************/
-// Helper function to create a Klaviyo profile
 async function createKlaviyoProfile(email, firstName) {
   const klaviyoCreateProfileUrl = 'https://a.klaviyo.com/api/profiles';
   const payload = {
@@ -55,7 +53,9 @@ async function createKlaviyoProfile(email, firstName) {
   return result.data.id;
 }
 
-// Helper function to add an existing Klaviyo profile to a list
+/********************************************************************
+ * Helper function to add an existing Klaviyo profile to a list
+ ********************************************************************/
 async function addProfileToList(klaviyoProfileId, email) {
   const klaviyoUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/relationships/profiles`;
   const payload = {
@@ -85,7 +85,9 @@ async function addProfileToList(klaviyoProfileId, email) {
   }
 }
 
-// Combined function to ensure the profile exists and is added to the list
+/********************************************************************
+ * Combined function to ensure the profile exists and is added to the list
+ ********************************************************************/
 async function subscribeToKlaviyoList(email, firstName) {
   let klaviyoProfileId;
   try {
@@ -93,31 +95,17 @@ async function subscribeToKlaviyoList(email, firstName) {
     klaviyoProfileId = await createKlaviyoProfile(email, firstName);
     console.log(`Created Klaviyo profile with id: ${klaviyoProfileId}`);
   } catch (error) {
-    // If profile creation fails, log the error.
-    // Depending on your flow, you might want to handle the error differently (e.g., check if it already exists).
     console.error('Error creating Klaviyo profile:', error);
     return;
   }
-
   // Now add the profile to the list using the obtained profile id
   await addProfileToList(klaviyoProfileId, email);
 }
-
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Klaviyo subscription error:', errorText);
-  } else {
-    console.log(`Successfully subscribed ${email} to Klaviyo list ${KLAVIYO_LIST_ID}.`);
-  }
-}
-
 
 /********************************************************************
  * Referral code generator
  ********************************************************************/
 function generateReferralCode() {
-  // Generates a 6-character referral code (you can adjust the byte length as needed)
   return crypto.randomBytes(3).toString('hex').toUpperCase();
 }
 
@@ -230,7 +218,6 @@ app.post('/api/referral/signup', async (req, res) => {
     if (referredBy) {
       const [referrerRows] = await pool.execute('SELECT * FROM users WHERE referral_code = ?', [referredBy]);
       if (referrerRows.length > 0) {
-        // Update the original user's points by adding 5
         await pool.execute('UPDATE users SET points = points + 5 WHERE referral_code = ?', [referredBy]);
         console.log(`Awarded 5 bonus points to the user with referral code ${referredBy}`);
       } else {
@@ -246,11 +233,10 @@ app.post('/api/referral/signup', async (req, res) => {
     const [result] = await pool.execute(sql, [firstName, email, initialPoints, referralCode, referredBy || null]);
     console.log('Signup insert result:', result);
     
-    // Subscribe the new user to Klaviyo
+    // Subscribe the new user to Klaviyo (create profile & add to list)
     subscribeToKlaviyoList(email, firstName)
       .catch(err => {
         console.error('Klaviyo subscription error:', err);
-        // We log the error but do not fail the signup.
       });
     
     // Construct the referral URL for the new user
@@ -286,14 +272,12 @@ app.post('/api/referral/award', async (req, res) => {
       return res.status(400).json({ error: 'Email and action are required.' });
     }
     
-    // Retrieve the user
     const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
     if (users.length === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
     const user = users[0];
 
-    // For the "social_media_follow" action, check if points have already been awarded
     if (action === 'social_media_follow') {
       const [existingBonus] = await pool.execute(
         'SELECT * FROM user_actions WHERE user_id = ? AND action_type = ?',
@@ -304,16 +288,13 @@ app.post('/api/referral/award', async (req, res) => {
       }
     }
     
-    // Award 5 points per action
     const pointsToAdd = 5;
     const newPoints = user.points + pointsToAdd;
     
-    // Update the user's points
     const updateSql = `UPDATE users SET points = ? WHERE email = ?`;
     await pool.execute(updateSql, [newPoints, email]);
     console.log('Award update result for', email);
 
-    // Record the action in the user_actions table
     const insertActionSql = `
       INSERT INTO user_actions (user_id, action_type, points_awarded)
       VALUES (?, ?, ?)
