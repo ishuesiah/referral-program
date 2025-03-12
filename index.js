@@ -11,7 +11,7 @@ const app = express();
 
 // Your private Klaviyo API key is now securely loaded from the environment
 const KLAVIYO_API_KEY = process.env.KLAVIYO_API_KEY;
-console.log('KLAVIYO_API_KEY:', process.env.KLAVIYO_API_KEY);
+// console.log('KLAVIYO_API_KEY:', process.env.KLAVIYO_API_KEY);
 
 // The Klaviyo list ID you want to add users to
 const KLAVIYO_LIST_ID = 'Vc2WdM';
@@ -22,13 +22,13 @@ const KLAVIYO_LIST_ID = 'Vc2WdM';
 async function createKlaviyoProfile(email, firstName) {
   const klaviyoCreateProfileUrl = 'https://a.klaviyo.com/api/profiles';
   const payload = {
-    data: {
+    data: [
       type: "profile",
       attributes: {
         email: email,
         first_name: firstName
       }
-    }
+    ]
   };
 
   // Use a fixed revision date per Klaviyo documentation
