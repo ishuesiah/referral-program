@@ -71,10 +71,12 @@ async function createKlaviyoProfile(email, firstName) {
 async function addProfileToList(klaviyoProfileId, email) {
   const klaviyoUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/relationships/profiles`;
   const payload = {
-    data: {
-      type: "profile",
-      id: klaviyoProfileId
-    }
+    data: [
+      {
+        type: "profile",
+        id: klaviyoProfileId
+      }
+    ]
   };
 
   const revisionHeader = '2023-12-15'; // Use the valid revision date per documentation
@@ -96,6 +98,7 @@ async function addProfileToList(klaviyoProfileId, email) {
     console.log(`Successfully added ${email} (profile id: ${klaviyoProfileId}) to Klaviyo list ${KLAVIYO_LIST_ID}.`);
   }
 }
+
 
 /********************************************************************
  * Combined function to ensure the profile exists and is added to the list
