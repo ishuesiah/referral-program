@@ -11,6 +11,7 @@ const app = express();
 
 // Your private Klaviyo API key is now securely loaded from the environment
 const KLAVIYO_API_KEY = process.env.KLAVIYO_API_KEY;
+// console.log('KLAVIYO_API_KEY:', process.env.KLAVIYO_API_KEY);
 
 // The Klaviyo list ID you want to add users to
 const KLAVIYO_LIST_ID = 'Vc2WdM';
@@ -18,15 +19,14 @@ const KLAVIYO_LIST_ID = 'Vc2WdM';
 /********************************************************************
  * Helper function to create a Klaviyo profile
  ********************************************************************/
-async function createKlaviyoProfile(email, firstName, lastName) {
+async function createKlaviyoProfile(email, firstName) {
   const klaviyoCreateProfileUrl = 'https://a.klaviyo.com/api/profiles';
   const payload = {
     data: {
       type: "profile",
       attributes: {
         email: email,
-        first_name: firstName,
-        last_name: lastName
+        first_name: firstName
       }
     }
   };
@@ -49,12 +49,10 @@ async function createKlaviyoProfile(email, firstName, lastName) {
     try {
       const errorJSON = JSON.parse(errorText);
       // If the profile already exists, Klaviyo returns a 409 with duplicate_profile error code.
-      if (
-        errorJSON.errors &&
-        errorJSON.errors[0].code === "duplicate_profile" &&
-        errorJSON.errors[0].meta &&
-        errorJSON.errors[0].meta.duplicate_profile_id
-      ) {
+      if (errorJSON.errors &&
+          errorJSON.errors[0].code === "duplicate_profile" &&
+          errorJSON.errors[0].meta &&
+          errorJSON.errors[0].meta.duplicate_profile_id) {
         console.log("Profile already exists. Using duplicate profile id: " + errorJSON.errors[0].meta.duplicate_profile_id);
         return errorJSON.errors[0].meta.duplicate_profile_id;
       }
@@ -101,14 +99,15 @@ async function addProfileToList(klaviyoProfileId, email) {
   }
 }
 
+
 /********************************************************************
  * Combined function to ensure the profile exists and is added to the list
  ********************************************************************/
-async function subscribeToKlaviyoList(email, firstName, lastName) {
+async function subscribeToKlaviyoList(email, firstName) {
   let klaviyoProfileId;
   try {
     // Try to create the profile first. If it already exists, the duplicate id is returned.
-    klaviyoProfileId = await createKlaviyoProfile(email, firstName, lastName);
+    klaviyoProfileId = await createKlaviyoProfile(email, firstName);
     console.log(`Created or retrieved Klaviyo profile with id: ${klaviyoProfileId}`);
   } catch (error) {
     console.error('Error creating Klaviyo profile:', error);
@@ -167,6 +166,7 @@ const pool = mysql.createPool({
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `;
+
     await connection.execute(createUsersTableQuery);
     console.log('Users table is set up.');
 
@@ -215,17 +215,17 @@ app.get('/', (req, res) => {
 /********************************************************************
  * POST /api/referral/signup
  * Registers a new referral user.
- * Expects { "email": "user@example.com", "firstName": "John", "lastName": "Doe", "referredBy": "ABC123" }
+ * Expects { "email": "user@example.com", "firstName": "John", "referredBy": "ABC123" }
  * Awards 5 points on signup and (optionally) 5 points to the referrer if referredBy is valid.
  * Also subscribes the new user to Klaviyo.
  ********************************************************************/
 app.post('/api/referral/signup', async (req, res) => {
   try {
     console.log('=== REFERRAL SIGNUP ===');
-    const { email, firstName, lastName, referredBy } = req.body;
+    const { email, firstName, referredBy } = req.body;
     
-    if (!email || !firstName || !lastName) {
-      return res.status(400).json({ error: 'First name, last name and email are required.' });
+    if (!email || !firstName) {
+      return res.status(400).json({ error: 'First name and email are required.' });
     }
     
     // Generate a unique referral code for the new user
@@ -243,16 +243,16 @@ app.post('/api/referral/signup', async (req, res) => {
       }
     }
     
-    // Insert the new user including the last_name field
+    // Insert the new user including the referred_by field (if provided)
     const sql = `
-      INSERT INTO users (first_name, last_name, email, points, referral_code, referred_by)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO users (first_name, email, points, referral_code, referred_by)
+      VALUES (?, ?, ?, ?, ?)
     `;
-    const [result] = await pool.execute(sql, [firstName, lastName, email, initialPoints, referralCode, referredBy || null]);
+    const [result] = await pool.execute(sql, [firstName, email, initialPoints, referralCode, referredBy || null]);
     console.log('Signup insert result:', result);
     
     // Subscribe the new user to Klaviyo (create profile & add to list)
-    subscribeToKlaviyoList(email, firstName, lastName)
+    subscribeToKlaviyoList(email, firstName)
       .catch(err => {
         console.error('Klaviyo subscription error:', err);
       });
