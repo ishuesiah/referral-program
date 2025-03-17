@@ -328,6 +328,34 @@ app.post('/api/referral/award', async (req, res) => {
   }
 });
 
+// POST /api/referral/shopify-id
+// Expects { "email": "user@example.com", "shopifyCustomerId": "gid://shopify/Customer/1234567890" }
+app.post('/api/referral/shopify-id', async (req, res) => {
+  try {
+    const { email, shopifyCustomerId } = req.body;
+    if (!email || !shopifyCustomerId) {
+      return res.status(400).json({ error: 'Missing email or shopifyCustomerId.' });
+    }
+
+    // Update the shopify_customer_id in your users table
+    const updateSql = `
+      UPDATE users
+      SET shopify_customer_id = ?
+      WHERE email = ?
+    `;
+    const [result] = await pool.execute(updateSql, [shopifyCustomerId, email]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    return res.json({ message: 'Shopify customer ID updated successfully.' });
+  } catch (error) {
+    console.error('Error updating Shopify customer ID:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+
 /********************************************************************
  * GET /api/referral/user/:email
  * Retrieves referral program details for a specific user.
