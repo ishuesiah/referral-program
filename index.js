@@ -153,8 +153,8 @@ const pool = mysql.createPool({
     console.log('Available tables:', tables.map(t => Object.values(t)[0]));
 
     // Create the "users" table with a new column for Shopify customer ID
-    const createUsersTableQuery = `
-      CREATE TABLE IF NOT EXISTS users (
+    const createUsersTableQuery = 
+      `CREATE TABLE IF NOT EXISTS users (
         user_id INT AUTO_INCREMENT PRIMARY KEY,
         shopify_customer_id VARCHAR(255) DEFAULT NULL,
         first_name VARCHAR(255) DEFAULT NULL,
@@ -162,9 +162,9 @@ const pool = mysql.createPool({
         points INT DEFAULT 0,
         referral_code VARCHAR(50) UNIQUE,
         referred_by VARCHAR(50) DEFAULT NULL,
+        last_discount_code VARCHAR(50) DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
+      );`;
     await connection.execute(createUsersTableQuery);
     console.log('Users table is set up.');
 
