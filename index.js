@@ -466,6 +466,34 @@ app.get('/api/debug/referral-user/:email', async (req, res) => {
   }
 });
 
+app.post('/api/shopify/order-webhook', express.json(), async (req, res) => {
+  const order = req.body;
+
+  try {
+    const email = order.email;
+    const discountCodes = (order.discount_codes || []).map(dc => dc.code);
+    const usedCode = discountCodes.find(code => code.startsWith('POINTS'));
+
+    if (email && usedCode) {
+      console.log(`Webhook: ${email} used discount code ${usedCode}`);
+
+      // 🔁 Call your internal API to check & remove used code
+      const checkResponse = await fetch(`https://reviews-kettd.kinsta.app/api/check-discount-used?code=${usedCode}`, {
+        method: 'GET'
+      });
+
+      const checkResult = await checkResponse.json();
+      console.log(`Check result:`, checkResult);
+    }
+
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error('Error in order webhook:', err.message);
+    res.status(500).send('Webhook handling failed');
+  }
+});
+
+
 /********************************************************************
  * Start the server
  ********************************************************************/
