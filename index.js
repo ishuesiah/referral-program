@@ -466,6 +466,10 @@ app.get('/api/debug/referral-user/:email', async (req, res) => {
   }
 });
 
+/********************************************************************
+ * Check if discount code used
+ ********************************************************************/
+
 app.post('/api/shopify/order-webhook', express.json(), async (req, res) => {
   const order = req.body;
 
@@ -492,6 +496,88 @@ app.post('/api/shopify/order-webhook', express.json(), async (req, res) => {
     res.status(500).send('Webhook handling failed');
   }
 });
+
+
+/********************************************************************
+ * Endpoint using Shopify Admin API to remove discountcode from table if used.
+ ********************************************************************/
+
+app.get('/api/check-discount-used', async (req, res) => {
+  const code = req.query.code;
+  if (!code) {
+    return res.status(400).json({ error: 'Missing discount code.' });
+  }
+
+  const shop = 'hemlock-oak.myshopify.com';
+  const token = process.env.SHOPIFY_ADMIN_TOKEN;
+  let connection;
+
+  try {
+    const query = `
+      query getDiscountByCode($code: String!) {
+        discountCodeRedeemCodeLookup(code: $code) {
+          codeDiscountNode {
+            id
+            codeDiscount {
+              ... on DiscountCodeBasic {
+                title
+                usageLimit
+                usageCount
+                endsAt
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const variables = { code };
+
+    const response = await fetch(`https://${shop}/admin/api/2024-10/graphql.json`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': token
+      },
+      body: JSON.stringify({ query, variables })
+    });
+
+    const result = await response.json();
+    const discount = result?.data?.discountCodeRedeemCodeLookup?.codeDiscountNode?.codeDiscount;
+
+    if (!discount) {
+      return res.status(404).json({ error: 'Discount code not found in Shopify.' });
+    }
+
+    const used = discount.usageCount >= discount.usageLimit;
+
+    if (used) {
+      connection = await pool.getConnection();
+      const [updateResult] = await connection.execute(
+        `UPDATE users SET last_discount_code = NULL WHERE last_discount_code = ?`,
+        [code]
+      );
+      console.log(`✅ Removed code '${code}' from ${updateResult.affectedRows} user(s).`);
+      connection.release();
+    }
+
+    return res.json({
+      code,
+      title: discount.title,
+      usageCount: discount.usageCount,
+      usageLimit: discount.usageLimit,
+      used,
+      action: used ? 'Code removed from DB' : 'Code still active'
+    });
+
+  } catch (error) {
+    console.error('❌ Error checking/removing discount code:', error.message);
+    return res.status(500).json({ error: 'Failed to check or update discount code usage.' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
 
 
 /********************************************************************
