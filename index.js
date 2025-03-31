@@ -285,7 +285,7 @@ app.post('/api/referral/check-purchase', async (req, res) => {
 
 async function rewardReferrerAfterPurchase(email) {
   const shop = 'hemlock-oak.myshopify.com';
-  const accessToken = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
+  const accessToken = process.env.SHOPIFY_ADMIN_TOKEN;
 
   // Step 1: Lookup referred user
   const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
