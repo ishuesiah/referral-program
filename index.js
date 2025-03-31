@@ -254,7 +254,7 @@ if (referredBy) {
     const referralUrl = `https://www.hemlockandoak.com/pages/email-signup/?ref=${referralCode}`;
     
     return res.status(201).json({
-      message: 'User signed up successfully and awarded 5 points!',
+      message: 'User signed up successfully!',
       userId: result.insertId,
       points: initialPoints,
       referralCode: referralCode,
@@ -268,6 +268,74 @@ if (referredBy) {
     return res.status(500).json({ error: 'Database error: ' + err.message });
   }
 });
+
+app.post('/api/referral/check-purchase', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required.' });
+
+  try {
+    const result = await rewardReferrerAfterPurchase(email);
+    return res.json(result);
+  } catch (err) {
+    console.error('Error checking referral purchase:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+
+async function rewardReferrerAfterPurchase(email) {
+  const shop = 'hemlock-oak.myshopify.com';
+  const accessToken = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
+
+  // Step 1: Lookup referred user
+  const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
+  if (users.length === 0) return { error: 'User not found.' };
+
+  const referredUser = users[0];
+
+  if (!referredUser.referred_by) {
+    return { message: 'User was not referred.' };
+  }
+
+  // Step 2: Check if this referral was already rewarded (you could track this in user_actions)
+  const [existingActions] = await pool.execute(`
+    SELECT * FROM user_actions
+    WHERE user_id = ? AND action_type = 'referral_purchase_award'
+  `, [referredUser.user_id]);
+
+  if (existingActions.length > 0) {
+    return { message: 'Referral already rewarded.' };
+  }
+
+  // Step 3: Query Shopify orders using stored shopify_customer_id
+  const customerId = referredUser.shopify_customer_id;
+  const ordersRes = await fetch(`https://${shop}/admin/api/2023-07/orders.json?customer_id=${customerId}&status=any`, {
+    headers: {
+      'X-Shopify-Access-Token': accessToken,
+      'Content-Type': 'application/json'
+    }
+  });
+  const ordersData = await ordersRes.json();
+  if (!ordersData.orders || ordersData.orders.length === 0) {
+    return { message: 'No purchase yet.' };
+  }
+
+  // Step 4: Award the referrer points
+  const [referrerRows] = await pool.execute('SELECT * FROM users WHERE referral_code = ?', [referredUser.referred_by]);
+  if (referrerRows.length === 0) return { error: 'Referrer not found.' };
+  const referrer = referrerRows[0];
+
+  const newPoints = referrer.points + 5;
+  await pool.execute('UPDATE users SET points = ? WHERE user_id = ?', [newPoints, referrer.user_id]);
+
+  // Step 5: Log the action
+  await pool.execute(`INSERT INTO user_actions (user_id, action_type, points_awarded) VALUES (?, 'referral_purchase_award', 5)`, [referredUser.user_id]);
+
+  return { message: `Awarded 5 points to referrer ${referrer.email}.` };
+  console.log(`✅ Awarded referrer ${referrer.email} 5 points for purchase by ${email}`);
+
+}
+
 
 /********************************************************************
  * POST /api/referral/award
