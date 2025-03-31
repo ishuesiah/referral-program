@@ -231,15 +231,10 @@ app.post('/api/referral/signup', async (req, res) => {
     const initialPoints = 5;
     
     // If a referral code was provided, try to find the original user and award them 5 points
-    if (referredBy) {
-      const [referrerRows] = await pool.execute('SELECT * FROM users WHERE referral_code = ?', [referredBy]);
-      if (referrerRows.length > 0) {
-        await pool.execute('UPDATE users SET points = points + 5 WHERE referral_code = ?', [referredBy]);
-        console.log(`Awarded 5 bonus points to the user with referral code ${referredBy}`);
-      } else {
-        console.log('Referral code provided does not match any existing user.');
-      }
-    }
+if (referredBy) {
+  console.log(`Referred by ${referredBy}, will track purchase-based reward.`);
+}
+
     
     // Insert the new user including the shopify_customer_id (if provided)
     const sql = `
