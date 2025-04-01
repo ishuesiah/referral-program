@@ -482,7 +482,7 @@ app.post('/api/shopify/order-webhook', express.json(), async (req, res) => {
       console.log(`Webhook: ${email} used discount code ${usedCode}`);
 
       // 🔁 Call your internal API to check & remove used code
-      const checkResponse = await fetch(`https://reviews-kettd.kinsta.app/api/check-discount-used?code=${usedCode}`, {
+      const checkResponse = await fetch(`https://referral-program-448vr.kinsta.app/api/check-discount-used?code=${usedCode}`, {
 
         method: 'GET'
       });
