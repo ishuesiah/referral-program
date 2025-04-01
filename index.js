@@ -511,31 +511,35 @@ app.get('/api/check-discount-used', async (req, res) => {
 
   const shop = 'hemlock-oak.myshopify.com';
   const token = process.env.SHOPIFY_ADMIN_TOKEN;
+  let connection;
 
   try {
     const query = `
-query getDiscountByCode($code: String!) {
-  codeDiscountNodes(first: 1, query: $code) {
-    edges {
-      node {
-        id
-        codeDiscount {
-          ... on DiscountCodeBasic {
-            title
-            codeCount
-            codes(first: 1) {
-              nodes {
-                code
+      query getDiscountByCode($code: String!) {
+        codeDiscountNodes(first: 1, query: $code) {
+          edges {
+            node {
+              id
+              codeDiscount {
+                ... on DiscountCodeBasic {
+                  title
+                  codeCount
+                  codes(first: 10) {
+                    nodes {
+                      code
+                      usageCount
+                      usageLimit
+                    }
+                  }
+                }
               }
             }
           }
         }
       }
-    }
-  }
-}
-
     `;
+
+    const variables = { code };
 
     const response = await fetch(`https://${shop}/admin/api/2024-10/graphql.json`, {
       method: 'POST',
@@ -543,59 +547,51 @@ query getDiscountByCode($code: String!) {
         'Content-Type': 'application/json',
         'X-Shopify-Access-Token': token
       },
-      body: JSON.stringify({ query })
+      body: JSON.stringify({ query, variables })
     });
 
     const result = await response.json();
 
-    const nodes = result?.data?.codeDiscountNodes?.edges || [];
-    let match = null;
-
-    for (const edge of nodes) {
-      const discount = edge.node.codeDiscount;
-      const codes = discount?.codes?.nodes || [];
-
-      for (const c of codes) {
-        if (c.code === code) {
-          match = {
-            code,
-            title: discount.title,
-            usageCount: c.usageCount,
-            usageLimit: c.usageLimit,
-            used: c.usageCount >= c.usageLimit
-          };
-          break;
-        }
-      }
-
-      if (match) break;
-    }
-
-    if (!match) {
+    const codeNodes = result?.data?.codeDiscountNodes?.edges;
+    if (!codeNodes || codeNodes.length === 0) {
       return res.status(404).json({ error: 'Discount code not found in Shopify.' });
     }
 
-    if (match.used) {
-      const connection = await pool.getConnection();
+    const discount = codeNodes[0].node.codeDiscount;
+    const matchingCode = discount.codes.nodes.find(c => c.code === code);
+
+    if (!matchingCode) {
+      return res.status(404).json({ error: 'Matching code not found in discount object.' });
+    }
+
+    const used = matchingCode.usageCount >= (matchingCode.usageLimit || 1);
+
+    if (used) {
+      connection = await pool.getConnection();
       const [updateResult] = await connection.execute(
         `UPDATE users SET last_discount_code = NULL WHERE last_discount_code = ?`,
         [code]
       );
+      console.log(`✅ Removed code '${code}' from ${updateResult.affectedRows} user(s).`);
       connection.release();
-      match.action = `✅ Code removed from ${updateResult.affectedRows} user(s).`;
-    } else {
-      match.action = 'Code is still valid and has not been used.';
     }
 
-    return res.json(match);
+    return res.json({
+      code,
+      title: discount.title,
+      usageCount: matchingCode.usageCount,
+      usageLimit: matchingCode.usageLimit,
+      used,
+      action: used ? 'Code removed from DB' : 'Code still active'
+    });
+
   } catch (error) {
-    console.error('❌ Error checking discount code:', error.message);
+    console.error('❌ Error checking/removing discount code:', error.message);
     return res.status(500).json({ error: 'Failed to check or update discount code usage.' });
+  } finally {
+    if (connection) connection.release();
   }
 });
-
-
-
 
 
 
