@@ -514,16 +514,15 @@ app.get('/api/check-discount-used', async (req, res) => {
 
   try {
     const query = `
-      query getDiscountByCode($code: String!) {
+      query codeDiscountNodeByCode($code: String!) {
         codeDiscountNodeByCode(code: $code) {
           id
           codeDiscount {
+            __typename
             ... on DiscountCodeBasic {
-              title
+              shortSummary
               usageLimit
               usageCount
-              endsAt
-              startsAt
               codes(first: 1) {
                 nodes {
                   code
@@ -557,20 +556,19 @@ app.get('/api/check-discount-used', async (req, res) => {
 
     const used = discount.usageCount >= discount.usageLimit;
 
-    // Optionally update your database if used
     if (used) {
       const connection = await pool.getConnection();
-      await connection.execute(
+      const [updateResult] = await connection.execute(
         `UPDATE users SET last_discount_code = NULL WHERE last_discount_code = ?`,
         [code]
       );
+      console.log(`✅ Removed code '${code}' from ${updateResult.affectedRows} user(s).`);
       connection.release();
-      console.log(`✅ Removed code '${code}' from users table`);
     }
 
     return res.json({
       code,
-      title: discount.title,
+      shortSummary: discount.shortSummary,
       usageCount: discount.usageCount,
       usageLimit: discount.usageLimit,
       used,
@@ -582,6 +580,7 @@ app.get('/api/check-discount-used', async (req, res) => {
     return res.status(500).json({ error: 'Failed to check or update discount code usage.' });
   }
 });
+
 
 
 
