@@ -477,20 +477,20 @@ app.post('/api/shopify/order-webhook', express.json(), async (req, res) => {
     const email = order.email;
     const discountCodes = (order.discount_codes || []).map(dc => dc.code);
     const usedCode = discountCodes.find(code => code.startsWith('POINTS'));
-
-    if (email && usedCode) {
-      console.log(`Webhook: ${email} used discount code ${usedCode}`);
-
-      // ✅ Run the same logic as /api/referral/check-purchase
+    
+    // Always reward the referrer regardless of discount code use
+    if (email) {
       const rewardResult = await rewardReferrerAfterPurchase(email);
       console.log('Reward result from webhook:', rewardResult);
-
-      // ✅ Check and remove code if used
+    }
+    
+    // Still run discount cleanup only if relevant
+    if (usedCode) {
       const checkResponse = await fetch(`https://referral-program-448vr.kinsta.app/api/check-discount-used?code=${usedCode}`);
       const checkResult = await checkResponse.json();
       console.log(`Check result:`, checkResult);
     }
-
+    
     res.status(200).send('OK');
   } catch (err) {
     console.error('Error in order webhook:', err.message);
