@@ -514,27 +514,27 @@ app.get('/api/check-discount-used', async (req, res) => {
 
   try {
     const query = `
-      query {
-        codeDiscountNodes(first: 50) {
-          edges {
-            node {
-              codeDiscount {
-                __typename
-                ... on DiscountCodeBasic {
-                  title
-                  codes(first: 10) {
-                    nodes {
-                      code
-                      usageLimit
-                      usageCount
-                    }
-                  }
-                }
+query getDiscountByCode($code: String!) {
+  codeDiscountNodes(first: 1, query: $code) {
+    edges {
+      node {
+        id
+        codeDiscount {
+          ... on DiscountCodeBasic {
+            title
+            codeCount
+            codes(first: 1) {
+              nodes {
+                code
               }
             }
           }
         }
       }
+    }
+  }
+}
+
     `;
 
     const response = await fetch(`https://${shop}/admin/api/2024-10/graphql.json`, {
