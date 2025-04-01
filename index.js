@@ -518,16 +518,15 @@ app.get('/api/check-discount-used', async (req, res) => {
         codeDiscountNodes(first: 50) {
           edges {
             node {
-              id
               codeDiscount {
                 __typename
                 ... on DiscountCodeBasic {
                   title
-                  usageCount
-                  usageLimit
                   codes(first: 10) {
                     nodes {
                       code
+                      usageLimit
+                      usageCount
                     }
                   }
                 }
@@ -549,52 +548,52 @@ app.get('/api/check-discount-used', async (req, res) => {
 
     const result = await response.json();
 
-    if (!result?.data?.codeDiscountNodes?.edges) {
-      console.error('❌ Unexpected Shopify response:', JSON.stringify(result, null, 2));
-      return res.status(500).json({ error: 'Shopify returned an unexpected structure.' });
-    }
+    const nodes = result?.data?.codeDiscountNodes?.edges || [];
+    let match = null;
 
-    const nodes = result.data.codeDiscountNodes.edges;
-
-    let found = null;
     for (const edge of nodes) {
       const discount = edge.node.codeDiscount;
-      const codeList = discount.codes.nodes.map(c => c.code);
-      if (codeList.includes(code)) {
-        found = {
-          code,
-          title: discount.title,
-          usageCount: discount.usageCount,
-          usageLimit: discount.usageLimit,
-          used: discount.usageCount >= discount.usageLimit,
-          id: edge.node.id
-        };
-        break;
+      const codes = discount?.codes?.nodes || [];
+
+      for (const c of codes) {
+        if (c.code === code) {
+          match = {
+            code,
+            title: discount.title,
+            usageCount: c.usageCount,
+            usageLimit: c.usageLimit,
+            used: c.usageCount >= c.usageLimit
+          };
+          break;
+        }
       }
+
+      if (match) break;
     }
 
-    if (!found) {
+    if (!match) {
       return res.status(404).json({ error: 'Discount code not found in Shopify.' });
     }
 
-    if (found.used) {
+    if (match.used) {
       const connection = await pool.getConnection();
       const [updateResult] = await connection.execute(
         `UPDATE users SET last_discount_code = NULL WHERE last_discount_code = ?`,
         [code]
       );
       connection.release();
-      found.action = `✅ Code removed from ${updateResult.affectedRows} user(s).`;
+      match.action = `✅ Code removed from ${updateResult.affectedRows} user(s).`;
     } else {
-      found.action = 'Code is still valid and has not been used.';
+      match.action = 'Code is still valid and has not been used.';
     }
 
-    return res.json(found);
+    return res.json(match);
   } catch (error) {
     console.error('❌ Error checking discount code:', error.message);
-    return res.status(500).json({ error: 'Failed to check discount code usage.' });
+    return res.status(500).json({ error: 'Failed to check or update discount code usage.' });
   }
 });
+
 
 
 
