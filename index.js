@@ -515,21 +515,22 @@ app.get('/api/check-discount-used', async (req, res) => {
 
   try {
     const query = `
-      query getDiscountByCode($code: String!) {
-        discountCodeRedeemCodeLookup(code: $code) {
-          codeDiscountNode {
+      query getDiscountCodeUsage($title: String!) {
+        discountCodeBasics(first: 10, query: $title) {
+          nodes {
             id
-            codeDiscount {
-              ... on DiscountCodeBasic {
-                title
-                usageLimit
+            title
+            codes(first: 10) {
+              nodes {
+                code
                 usageCount
-                endsAt
+                usageLimit
               }
             }
           }
         }
       }
+
     `;
 
     const variables = { code };
