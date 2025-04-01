@@ -477,26 +477,37 @@ app.post('/api/shopify/order-webhook', express.json(), async (req, res) => {
     const email = order.email;
     const discountCodes = (order.discount_codes || []).map(dc => dc.code);
     const usedCode = discountCodes.find(code => code.startsWith('POINTS'));
-    
-    // Always reward the referrer regardless of discount code use
+
+    // ✅ Always trigger reward logic based on email
     if (email) {
-      const rewardResult = await rewardReferrerAfterPurchase(email);
-      console.log('Reward result from webhook:', rewardResult);
+      console.log(`[Webhook] Checking purchase for ${email}`);
+
+      const rewardRes = await fetch('https://referral-program-448vr.kinsta.app/api/referral/check-purchase', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email })
+      });
+
+      const rewardResult = await rewardRes.json();
+      console.log(`[Webhook] Reward response:`, rewardResult);
     }
-    
-    // Still run discount cleanup only if relevant
+
+    // ✅ Optional: still check & clean up discount code
     if (usedCode) {
       const checkResponse = await fetch(`https://referral-program-448vr.kinsta.app/api/check-discount-used?code=${usedCode}`);
       const checkResult = await checkResponse.json();
-      console.log(`Check result:`, checkResult);
+      console.log(`[Webhook] Discount check result:`, checkResult);
     }
-    
+
     res.status(200).send('OK');
   } catch (err) {
-    console.error('Error in order webhook:', err.message);
-    res.status(500).send('Webhook handling failed');
+    console.error('❌ Webhook error:', err.message);
+    res.status(500).send('Webhook failed');
   }
 });
+
 
 
 /********************************************************************
