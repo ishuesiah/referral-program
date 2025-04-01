@@ -513,7 +513,6 @@ app.get('/api/check-discount-used', async (req, res) => {
   const token = process.env.SHOPIFY_ADMIN_TOKEN;
 
   try {
-    // Step 1: Get a list of DiscountCodeBasic codes and find matching one
     const query = `
       query {
         codeDiscountNodes(first: 50) {
@@ -549,6 +548,12 @@ app.get('/api/check-discount-used', async (req, res) => {
     });
 
     const result = await response.json();
+
+    if (!result?.data?.codeDiscountNodes?.edges) {
+      console.error('❌ Unexpected Shopify response:', JSON.stringify(result, null, 2));
+      return res.status(500).json({ error: 'Shopify returned an unexpected structure.' });
+    }
+
     const nodes = result.data.codeDiscountNodes.edges;
 
     let found = null;
@@ -572,7 +577,6 @@ app.get('/api/check-discount-used', async (req, res) => {
       return res.status(404).json({ error: 'Discount code not found in Shopify.' });
     }
 
-    // Step 2: If used, remove from DB
     if (found.used) {
       const connection = await pool.getConnection();
       const [updateResult] = await connection.execute(
@@ -591,6 +595,7 @@ app.get('/api/check-discount-used', async (req, res) => {
     return res.status(500).json({ error: 'Failed to check discount code usage.' });
   }
 });
+
 
 
 
