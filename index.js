@@ -504,8 +504,8 @@ app.post('/api/shopify/order-webhook', express.json(), async (req, res) => {
  ********************************************************************/
 
 app.get('/api/check-discount-used', async (req, res) => {
-  const code = req.query.code;
-  if (!code) {
+  const codeToCheck = req.query.code;
+  if (!codeToCheck) {
     return res.status(400).json({ error: 'Missing discount code.' });
   }
 
@@ -515,25 +515,21 @@ app.get('/api/check-discount-used', async (req, res) => {
 
   try {
     const query = `
-      query getDiscountCodeUsage($title: String!) {
-        discountCodeBasics(first: 10, query: $title) {
+      query {
+        discountCodeBasics(first: 100) {
           nodes {
-            id
             title
-            codes(first: 10) {
+            codes(first: 50) {
               nodes {
                 code
-                usageCount
                 usageLimit
+                usageCount
               }
             }
           }
         }
       }
-
     `;
-
-    const variables = { code };
 
     const response = await fetch(`https://${shop}/admin/api/2024-10/graphql.json`, {
       method: 'POST',
@@ -541,33 +537,49 @@ app.get('/api/check-discount-used', async (req, res) => {
         'Content-Type': 'application/json',
         'X-Shopify-Access-Token': token
       },
-      body: JSON.stringify({ query, variables })
+      body: JSON.stringify({ query })
     });
 
     const result = await response.json();
-    const discount = result?.data?.discountCodeRedeemCodeLookup?.codeDiscountNode?.codeDiscount;
 
-    if (!discount) {
+    const allDiscounts = result?.data?.discountCodeBasics?.nodes || [];
+    let foundCode = null;
+
+    for (const discount of allDiscounts) {
+      for (const codeNode of discount.codes.nodes) {
+        if (codeNode.code === codeToCheck) {
+          foundCode = {
+            title: discount.title,
+            usageCount: codeNode.usageCount,
+            usageLimit: codeNode.usageLimit
+          };
+          break;
+        }
+      }
+      if (foundCode) break;
+    }
+
+    if (!foundCode) {
       return res.status(404).json({ error: 'Discount code not found in Shopify.' });
     }
 
-    const used = discount.usageCount >= discount.usageLimit;
+    const used = foundCode.usageCount >= foundCode.usageLimit;
 
     if (used) {
       connection = await pool.getConnection();
       const [updateResult] = await connection.execute(
         `UPDATE users SET last_discount_code = NULL WHERE last_discount_code = ?`,
-        [code]
+        [codeToCheck]
       );
-      console.log(`✅ Removed code '${code}' from ${updateResult.affectedRows} user(s).`);
+      console.log(`✅ Removed code '${codeToCheck}' from ${updateResult.affectedRows} user(s).`);
       connection.release();
     }
 
     return res.json({
-      code,
-      title: discount.title,
-      usageCount: discount.usageCount,
-      usageLimit: discount.usageLimit,
+      code: codeToCheck,
+      title: foundCode.title,
+      usageCount: foundCode.usageCount,
+      usageLimit: foundCode.usageLimit,
       used,
       action: used ? 'Code removed from DB' : 'Code still active'
     });
@@ -579,6 +591,7 @@ app.get('/api/check-discount-used', async (req, res) => {
     if (connection) connection.release();
   }
 });
+
 
 
 
