@@ -511,26 +511,22 @@ app.get('/api/check-discount-used', async (req, res) => {
 
   const shop = 'hemlock-oak.myshopify.com';
   const token = process.env.SHOPIFY_ADMIN_TOKEN;
-  let connection;
 
   try {
     const query = `
       query getDiscountByCode($code: String!) {
-        codeDiscountNodes(first: 1, query: $code) {
-          edges {
-            node {
-              id
-              codeDiscount {
-                ... on DiscountCodeBasic {
-                  title
-                  codeCount
-                  codes(first: 10) {
-                    nodes {
-                      code
-                      usageCount
-                      usageLimit
-                    }
-                  }
+        codeDiscountNodeByCode(code: $code) {
+          id
+          codeDiscount {
+            ... on DiscountCodeBasic {
+              title
+              usageLimit
+              usageCount
+              endsAt
+              startsAt
+              codes(first: 1) {
+                nodes {
+                  code
                 }
               }
             }
@@ -552,35 +548,31 @@ app.get('/api/check-discount-used', async (req, res) => {
 
     const result = await response.json();
 
-    const codeNodes = result?.data?.codeDiscountNodes?.edges;
-    if (!codeNodes || codeNodes.length === 0) {
+    const discountNode = result?.data?.codeDiscountNodeByCode;
+    const discount = discountNode?.codeDiscount;
+
+    if (!discount) {
       return res.status(404).json({ error: 'Discount code not found in Shopify.' });
     }
 
-    const discount = codeNodes[0].node.codeDiscount;
-    const matchingCode = discount.codes.nodes.find(c => c.code === code);
+    const used = discount.usageCount >= discount.usageLimit;
 
-    if (!matchingCode) {
-      return res.status(404).json({ error: 'Matching code not found in discount object.' });
-    }
-
-    const used = matchingCode.usageCount >= (matchingCode.usageLimit || 1);
-
+    // Optionally update your database if used
     if (used) {
-      connection = await pool.getConnection();
-      const [updateResult] = await connection.execute(
+      const connection = await pool.getConnection();
+      await connection.execute(
         `UPDATE users SET last_discount_code = NULL WHERE last_discount_code = ?`,
         [code]
       );
-      console.log(`✅ Removed code '${code}' from ${updateResult.affectedRows} user(s).`);
       connection.release();
+      console.log(`✅ Removed code '${code}' from users table`);
     }
 
     return res.json({
       code,
       title: discount.title,
-      usageCount: matchingCode.usageCount,
-      usageLimit: matchingCode.usageLimit,
+      usageCount: discount.usageCount,
+      usageLimit: discount.usageLimit,
       used,
       action: used ? 'Code removed from DB' : 'Code still active'
     });
@@ -588,10 +580,9 @@ app.get('/api/check-discount-used', async (req, res) => {
   } catch (error) {
     console.error('❌ Error checking/removing discount code:', error.message);
     return res.status(500).json({ error: 'Failed to check or update discount code usage.' });
-  } finally {
-    if (connection) connection.release();
   }
 });
+
 
 
 
