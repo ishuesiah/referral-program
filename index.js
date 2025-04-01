@@ -282,7 +282,9 @@ app.post('/api/referral/check-purchase', async (req, res) => {
   }
 });
 
-
+/********************************************************************
+ rewardReferrerAfterPurchase
+ ********************************************************************/
 async function rewardReferrerAfterPurchase(email) {
   const shop = 'hemlock-oak.myshopify.com';
   const accessToken = process.env.SHOPIFY_ADMIN_TOKEN;
@@ -293,18 +295,14 @@ async function rewardReferrerAfterPurchase(email) {
 
   const referredUser = users[0];
 
-  if (!referredUser.referred_by) {
-    return { message: 'User was not referred.' };
-  }
-
-  // Step 2: Check if this referral was already rewarded (you could track this in user_actions)
-  const [existingActions] = await pool.execute(`
+  // Step 2: Check if this reward was already given to user (to avoid double points)
+  const [userReward] = await pool.execute(`
     SELECT * FROM user_actions
-    WHERE user_id = ? AND action_type = 'referral_purchase_award'
+    WHERE user_id = ? AND action_type = 'first_purchase_award'
   `, [referredUser.user_id]);
 
-  if (existingActions.length > 0) {
-    return { message: 'Referral already rewarded.' };
+  if (userReward.length > 0) {
+    return { message: 'User has already been rewarded for their first purchase.' };
   }
 
   // Step 3: Query Shopify orders using stored shopify_customer_id
@@ -320,21 +318,54 @@ async function rewardReferrerAfterPurchase(email) {
     return { message: 'No purchase yet.' };
   }
 
-  // Step 4: Award the referrer points
-  const [referrerRows] = await pool.execute('SELECT * FROM users WHERE referral_code = ?', [referredUser.referred_by]);
-  if (referrerRows.length === 0) return { error: 'Referrer not found.' };
-  const referrer = referrerRows[0];
+  const connection = await pool.getConnection();
 
-  const newPoints = referrer.points + 5;
-  await pool.execute('UPDATE users SET points = ? WHERE user_id = ?', [newPoints, referrer.user_id]);
+  try {
+    // Step 4: Award the user 5 points for making a purchase
+    const newUserPoints = referredUser.points + 5;
+    await connection.execute('UPDATE users SET points = ? WHERE user_id = ?', [newUserPoints, referredUser.user_id]);
+    await connection.execute(`
+      INSERT INTO user_actions (user_id, action_type, points_awarded)
+      VALUES (?, 'first_purchase_award', 5)
+    `, [referredUser.user_id]);
 
-  // Step 5: Log the action
-  await pool.execute(`INSERT INTO user_actions (user_id, action_type, points_awarded) VALUES (?, 'referral_purchase_award', 5)`, [referredUser.user_id]);
+    let referrerMessage = 'No referrer, so no additional reward.';
 
-  return { message: `Awarded 5 points to referrer ${referrer.email}.` };
-  console.log(`✅ Awarded referrer ${referrer.email} 5 points for purchase by ${email}`);
+    // Step 5: If there was a referrer, also award them
+    if (referredUser.referred_by) {
+      const [referrerRows] = await connection.execute('SELECT * FROM users WHERE referral_code = ?', [referredUser.referred_by]);
+      if (referrerRows.length > 0) {
+        const referrer = referrerRows[0];
 
+        // Ensure referrer hasn't already been rewarded
+        const [existingActions] = await connection.execute(`
+          SELECT * FROM user_actions
+          WHERE user_id = ? AND action_type = 'referral_purchase_award'
+        `, [referredUser.user_id]);
+
+        if (existingActions.length === 0) {
+          const newRefPoints = referrer.points + 5;
+          await connection.execute('UPDATE users SET points = ? WHERE user_id = ?', [newRefPoints, referrer.user_id]);
+          await connection.execute(`
+            INSERT INTO user_actions (user_id, action_type, points_awarded)
+            VALUES (?, 'referral_purchase_award', 5)
+          `, [referredUser.user_id]);
+          referrerMessage = `Awarded 5 points to referrer ${referrer.email}.`;
+        } else {
+          referrerMessage = 'Referrer already rewarded.';
+        }
+      }
+    }
+
+    return {
+      message: `Awarded 5 points to purchaser ${referredUser.email}.`,
+      referrerMessage
+    };
+  } finally {
+    connection.release();
+  }
 }
+
 
 
 /********************************************************************
