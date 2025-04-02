@@ -283,7 +283,7 @@ app.post('/api/referral/check-purchase', async (req, res) => {
 });
 
 /********************************************************************
- rewardReferrerAfterPurchase
+ * rewardReferrerAfterPurchase
  ********************************************************************/
 async function rewardReferrerAfterPurchase(email) {
   const shop = 'hemlock-oak.myshopify.com';
@@ -321,9 +321,11 @@ async function rewardReferrerAfterPurchase(email) {
   const connection = await pool.getConnection();
 
   try {
-    // Step 4: Award the user 5 points for making a purchase
-    const newUserPoints = referredUser.points + 5;
-    await connection.execute('UPDATE users SET points = ? WHERE user_id = ?', [newUserPoints, referredUser.user_id]);
+    // Step 4: Award 5 points to the purchaser
+    await connection.execute(
+      'UPDATE users SET points = points + 5 WHERE user_id = ?',
+      [referredUser.user_id]
+    );
     await connection.execute(`
       INSERT INTO user_actions (user_id, action_type, points_awarded)
       VALUES (?, 'first_purchase_award', 5)
@@ -331,26 +333,37 @@ async function rewardReferrerAfterPurchase(email) {
 
     let referrerMessage = 'No referrer, so no additional reward.';
 
-    // Step 5: If there was a referrer, also award them
+    // Step 5: If there is a referrer, reward them too
     if (referredUser.referred_by) {
-      const [referrerRows] = await connection.execute('SELECT * FROM users WHERE referral_code = ?', [referredUser.referred_by]);
+      const [referrerRows] = await connection.execute(
+        'SELECT * FROM users WHERE referral_code = ?',
+        [referredUser.referred_by]
+      );
+
       if (referrerRows.length > 0) {
         const referrer = referrerRows[0];
 
-        // Ensure referrer hasn't already been rewarded
+        // Check if referrer already rewarded for this user's purchase
         const [existingActions] = await connection.execute(`
           SELECT * FROM user_actions
           WHERE user_id = ? AND action_type = 'referral_purchase_award'
         `, [referredUser.user_id]);
 
         if (existingActions.length === 0) {
-          const newRefPoints = referrer.points + 5;
-          await connection.execute('UPDATE users SET points = ? WHERE user_id = ?', [newRefPoints, referrer.user_id]);
+          // Award referrer 5 points and increment referral_purchases_count
+          await connection.execute(`
+            UPDATE users
+            SET points = points + 5,
+                referral_purchases_count = referral_purchases_count + 1
+            WHERE user_id = ?
+          `, [referrer.user_id]);
+
           await connection.execute(`
             INSERT INTO user_actions (user_id, action_type, points_awarded)
             VALUES (?, 'referral_purchase_award', 5)
           `, [referredUser.user_id]);
-          referrerMessage = `Awarded 5 points to referrer ${referrer.email}.`;
+
+          referrerMessage = `Awarded 5 points to referrer ${referrer.email} and incremented referral purchase count.`;
         } else {
           referrerMessage = 'Referrer already rewarded.';
         }
@@ -361,12 +374,13 @@ async function rewardReferrerAfterPurchase(email) {
       message: `Awarded 5 points to purchaser ${referredUser.email}.`,
       referrerMessage
     };
+  } catch (err) {
+    console.error('Error rewarding referrer:', err);
+    return { error: 'Unexpected error occurred.' };
   } finally {
     connection.release();
   }
 }
-
-
 
 /********************************************************************
  * POST /api/referral/award
