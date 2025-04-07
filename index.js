@@ -363,6 +363,13 @@ async function rewardReferrerAfterPurchase(email) {
             VALUES (?, 'referral_purchase_award', 5)
           `, [referredUser.user_id]);
 
+           // Increment referral_count
+          await connection.execute(
+          'UPDATE users SET referral_count = referral_count + 1 WHERE user_id = ?',
+          [referrer.user_id]
+        );
+
+
           referrerMessage = `Awarded 5 points to referrer ${referrer.email} and incremented referral purchase count.`;
         } else {
           referrerMessage = 'Referrer already rewarded.';
