@@ -295,17 +295,7 @@ async function rewardReferrerAfterPurchase(email) {
 
   const referredUser = users[0];
 
-  // Step 2: Check if this reward was already given to user (to avoid double points)
-  const [userReward] = await pool.execute(`
-    SELECT * FROM user_actions
-    WHERE user_id = ? AND action_type = 'first_purchase_award'
-  `, [referredUser.user_id]);
-
-  if (userReward.length > 0) {
-    return { message: 'User has already been rewarded for their first purchase.' };
-  }
-
-  // Step 3: Query Shopify orders using stored shopify_customer_id
+  // Step 2: Query Shopify orders using stored shopify_customer_id
   const customerId = referredUser.shopify_customer_id;
   const ordersRes = await fetch(`https://${shop}/admin/api/2023-07/orders.json?customer_id=${customerId}&status=any`, {
     headers: {
@@ -314,28 +304,44 @@ async function rewardReferrerAfterPurchase(email) {
     }
   });
   const ordersData = await ordersRes.json();
-  if (!ordersData.orders || ordersData.orders.length === 0) {
-    return { message: 'No purchase yet.' };
+  const orders = ordersData.orders;
+  if (!orders || orders.length === 0) {
+    return { message: 'No purchases yet.' };
   }
 
   const connection = await pool.getConnection();
 
   try {
-    // Step 4: Calculate total spent and award points (5 points per 1 CAD)
-    const totalSpent = ordersData.orders.reduce((sum, order) => sum + parseFloat(order.total_price), 0);
-    const earnedPoints = Math.floor(totalSpent * 5);
-    
-    await connection.execute(
-      'UPDATE users SET points = points + ? WHERE user_id = ?',
-      [earnedPoints, referredUser.user_id]
-    );
-    await connection.execute(`
-      INSERT INTO user_actions (user_id, action_type, points_awarded)
-      VALUES (?, 'first_purchase_award', ?)
-    `, [referredUser.user_id, earnedPoints]);
+    let totalAwardedPoints = 0;
 
+    for (const order of orders) {
+      const orderId = order.id;
+      const orderTotal = parseFloat(order.total_price || '0.00');
 
-    // Step 5: If there is a referrer, reward them too
+      // Skip if already rewarded for this order
+      const [existing] = await connection.execute(
+        'SELECT * FROM user_actions WHERE user_id = ? AND action_type = ?',
+        [referredUser.user_id, `purchase_order_${orderId}`]
+      );
+      if (existing.length > 0) continue;
+
+      const earnedPoints = Math.floor(orderTotal * 5);
+      totalAwardedPoints += earnedPoints;
+
+      // Update user points and log the action
+      await connection.execute(
+        'UPDATE users SET points = points + ? WHERE user_id = ?',
+        [earnedPoints, referredUser.user_id]
+      );
+      await connection.execute(`
+        INSERT INTO user_actions (user_id, action_type, points_awarded)
+        VALUES (?, ?, ?)
+      `, [referredUser.user_id, `purchase_order_${orderId}`, earnedPoints]);
+    }
+
+    let referrerMessage = 'No referrer, so no additional reward.';
+
+    // Award points to referrer once if not already rewarded
     if (referredUser.referred_by) {
       const [referrerRows] = await connection.execute(
         'SELECT * FROM users WHERE referral_code = ?',
@@ -345,14 +351,12 @@ async function rewardReferrerAfterPurchase(email) {
       if (referrerRows.length > 0) {
         const referrer = referrerRows[0];
 
-        // Check if referrer already rewarded for this user's purchase
         const [existingActions] = await connection.execute(`
           SELECT * FROM user_actions
           WHERE user_id = ? AND action_type = 'referral_purchase_award'
         `, [referredUser.user_id]);
 
         if (existingActions.length === 0) {
-          // Award referrer 5 points and increment referral_purchases_count
           await connection.execute(`
             UPDATE users
             SET points = points + 5,
@@ -365,14 +369,12 @@ async function rewardReferrerAfterPurchase(email) {
             VALUES (?, 'referral_purchase_award', 5)
           `, [referredUser.user_id]);
 
-           // Increment referral_count
           await connection.execute(
-          'UPDATE users SET referral_count = referral_count + 1 WHERE user_id = ?',
-          [referrer.user_id]
-        );
+            'UPDATE users SET referral_count = referral_count + 1 WHERE user_id = ?',
+            [referrer.user_id]
+          );
 
-
-          referrerMessage = `Awarded 5 points to referrer ${referrer.email} and incremented referral purchase count.`;
+          referrerMessage = `Awarded 5 points to referrer ${referrer.email}.`;
         } else {
           referrerMessage = 'Referrer already rewarded.';
         }
@@ -380,7 +382,7 @@ async function rewardReferrerAfterPurchase(email) {
     }
 
     return {
-      message: `Awarded 5 points to purchaser ${referredUser.email}.`,
+      message: `Awarded ${totalAwardedPoints} points to ${referredUser.email}.`,
       referrerMessage
     };
   } catch (err) {
@@ -390,6 +392,7 @@ async function rewardReferrerAfterPurchase(email) {
     connection.release();
   }
 }
+
 
 /********************************************************************
  * POST /api/referral/award
