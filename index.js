@@ -635,15 +635,15 @@ app.get('/api/check-discount-used', async (req, res) => {
     const usageLimit = discount.usageLimit || 1;
     const used = usageCount >= usageLimit;
 
-    // Optionally remove from DB
-    if (used) {
-      const connection = await pool.getConnection();
-      await connection.execute(
-        'UPDATE users SET last_discount_code = NULL WHERE last_discount_code = ?',
-        [code]
-      );
-      connection.release();
-    }
+    const connection = await pool.getConnection();
+    const [updateResult] = await connection.execute(
+      'UPDATE users SET last_discount_code = NULL WHERE last_discount_code = ?',
+      [code]
+    );
+    connection.release();
+    
+    console.log(`[DB] Cleared last_discount_code for code: ${code}. Rows affected: ${updateResult.affectedRows}`);
+
 
     return res.json({
       code,
