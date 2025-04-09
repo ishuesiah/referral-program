@@ -321,17 +321,19 @@ async function rewardReferrerAfterPurchase(email) {
   const connection = await pool.getConnection();
 
   try {
-    // Step 4: Award 5 points to the purchaser
+    // Step 4: Calculate total spent and award points (5 points per 1 CAD)
+    const totalSpent = ordersData.orders.reduce((sum, order) => sum + parseFloat(order.total_price), 0);
+    const earnedPoints = Math.floor(totalSpent * 5);
+    
     await connection.execute(
-      'UPDATE users SET points = points + 5 WHERE user_id = ?',
-      [referredUser.user_id]
+      'UPDATE users SET points = points + ? WHERE user_id = ?',
+      [earnedPoints, referredUser.user_id]
     );
     await connection.execute(`
       INSERT INTO user_actions (user_id, action_type, points_awarded)
-      VALUES (?, 'first_purchase_award', 5)
-    `, [referredUser.user_id]);
+      VALUES (?, 'first_purchase_award', ?)
+    `, [referredUser.user_id, earnedPoints]);
 
-    let referrerMessage = 'No referrer, so no additional reward.';
 
     // Step 5: If there is a referrer, reward them too
     if (referredUser.referred_by) {
