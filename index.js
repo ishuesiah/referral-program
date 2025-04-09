@@ -637,7 +637,7 @@ app.get('/api/check-discount-used', async (req, res) => {
 
     const connection = await pool.getConnection();
     const [updateResult] = await connection.execute(
-      'UPDATE users SET last_discount_code = NULL WHERE last_discount_code = ?',
+      'UPDATE users SET last_discount_code = NULL, discount_code_id = NULL WHERE email = ?',
       [code]
     );
     connection.release();
