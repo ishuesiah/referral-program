@@ -635,14 +635,29 @@ app.get('/api/check-discount-used', async (req, res) => {
     const usageLimit = discount.usageLimit || 1;
     const used = usageCount >= usageLimit;
 
+    // Always clear code from DB — find user first
     const connection = await pool.getConnection();
-    const [updateResult] = await connection.execute(
-      'UPDATE users SET last_discount_code = NULL, discount_code_id = NULL WHERE email = ?',
+    
+    const [users] = await connection.execute(
+      'SELECT email FROM users WHERE last_discount_code = ?',
       [code]
     );
-    connection.release();
     
-    console.log(`[DB] Cleared last_discount_code for code: ${code}. Rows affected: ${updateResult.affectedRows}`);
+    if (users.length > 0) {
+      const email = users[0].email;
+    
+      await connection.execute(
+        'UPDATE users SET last_discount_code = NULL, discount_code_id = NULL WHERE email = ?',
+        [email]
+      );
+    
+      console.log(`[DB] Cleared discount fields for email: ${email}`);
+    } else {
+      console.warn(`[DB] No user found with code: ${code}`);
+    }
+    
+    connection.release();
+
 
 
     return res.json({
