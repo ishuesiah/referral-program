@@ -552,9 +552,11 @@ if (usedCode) {
   const checkResult = await checkResponse.json();
   console.log(`[Webhook] Discount check result:`, checkResult);
 
-  // ✅ Notify front-end via fetch call (if needed) or prepare logic to clean the UI
-  if (checkResult.used) {
-    const clearCodeRes = await fetch(`https://reviews-kettd.kinsta.app//api/referral/mark-discount-used`, {
+  // ✅ NEW: If Shopify says "not found", we assume it was used and expired
+  const shouldClear = checkResult.used || checkResult.error === 'Discount code not found in Shopify.';
+
+  if (shouldClear) {
+    const clearCodeRes = await fetch(`https://reviews-kettd.kinsta.app/api/referral/mark-discount-used`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -567,6 +569,7 @@ if (usedCode) {
     console.log(`[Webhook] Code cleared:`, clearResult);
   }
 }
+
 
 
     res.status(200).send('OK');
