@@ -554,7 +554,7 @@ if (usedCode) {
 
   // ✅ Notify front-end via fetch call (if needed) or prepare logic to clean the UI
   if (checkResult.used) {
-    const clearCodeRes = await fetch(`https://referral-program-448vr.kinsta.app/api/referral/mark-discount-used`, {
+    const clearCodeRes = await fetch(`https://reviews-kettd.kinsta.app//api/referral/mark-discount-used`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
