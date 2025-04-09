@@ -547,11 +547,27 @@ app.post('/api/shopify/order-webhook', express.json(), async (req, res) => {
     }
 
     // ✅ Optional: still check & clean up discount code
-    if (usedCode) {
-      const checkResponse = await fetch(`https://referral-program-448vr.kinsta.app/api/check-discount-used?code=${usedCode}`);
-      const checkResult = await checkResponse.json();
-      console.log(`[Webhook] Discount check result:`, checkResult);
-    }
+if (usedCode) {
+  const checkResponse = await fetch(`https://referral-program-448vr.kinsta.app/api/check-discount-used?code=${usedCode}`);
+  const checkResult = await checkResponse.json();
+  console.log(`[Webhook] Discount check result:`, checkResult);
+
+  // ✅ Notify front-end via fetch call (if needed) or prepare logic to clean the UI
+  if (checkResult.used) {
+    const clearCodeRes = await fetch(`https://referral-program-448vr.kinsta.app/api/referral/mark-discount-used`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email,
+        usedCode: usedCode
+      })
+    });
+
+    const clearResult = await clearCodeRes.json();
+    console.log(`[Webhook] Code cleared:`, clearResult);
+  }
+}
+
 
     res.status(200).send('OK');
   } catch (err) {
