@@ -379,18 +379,23 @@ async function rewardReferrerAfterPurchase(email) {
 }
 
 //TEST PURCHASE
-app.post('/api/debug/test-reward', async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'Missing email' });
+app.post('/api/test-reward-calc', async (req, res) => {
+  const { totalSpent } = req.body;
 
-  try {
-    const result = await rewardReferrerAfterPurchase(email);
-    return res.json(result);
-  } catch (err) {
-    console.error('Test reward error:', err.message);
-    return res.status(500).json({ error: err.message });
+  if (!totalSpent || isNaN(totalSpent)) {
+    return res.status(400).json({ error: 'Missing or invalid totalSpent value.' });
   }
+
+  // 🧪 Test calculation
+  const awardedPoints = Math.floor(parseFloat(totalSpent) * 5);
+
+  return res.json({
+    totalSpent,
+    awardedPoints,
+    message: `For $${totalSpent}, you earn ${awardedPoints} points.`
+  });
 });
+
 
 
 
