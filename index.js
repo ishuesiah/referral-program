@@ -407,6 +407,32 @@ app.post('/api/test-total-spent', async (req, res) => {
 });
 
 
+//TEST IF CUSTOMER HAS ORDERS
+app.post('/api/test-shopify-orders', async (req, res) => {
+  const { shopifyCustomerId } = req.body;
+  if (!shopifyCustomerId) return res.status(400).json({ error: 'Missing shopifyCustomerId' });
+
+  const shop = 'hemlock-oak.myshopify.com';
+  const accessToken = process.env.SHOPIFY_ADMIN_TOKEN;
+
+  try {
+    const response = await fetch(`https://${shop}/admin/api/2023-07/orders.json?customer_id=${shopifyCustomerId}&status=any`, {
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+    return res.json({
+      totalOrders: data.orders?.length || 0,
+      orders: data.orders
+    });
+  } catch (err) {
+    console.error('Shopify order fetch error:', err);
+    return res.status(500).json({ error: 'Failed to fetch Shopify orders' });
+  }
+});
 
 
 
