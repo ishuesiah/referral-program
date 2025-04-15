@@ -379,22 +379,33 @@ async function rewardReferrerAfterPurchase(email) {
 }
 
 //TEST PURCHASE
-app.post('/api/test-reward-calc', async (req, res) => {
-  const { totalSpent } = req.body;
+app.post('/api/test-total-spent', async (req, res) => {
+  const { orders } = req.body;
 
-  if (!totalSpent || isNaN(totalSpent)) {
-    return res.status(400).json({ error: 'Missing or invalid totalSpent value.' });
+  if (!orders || !Array.isArray(orders)) {
+    return res.status(400).json({ error: 'Missing or invalid orders array.' });
   }
 
-  // 🧪 Test calculation
-  const awardedPoints = Math.floor(parseFloat(totalSpent) * 5);
+  try {
+    // Replicate your real logic
+    const totalSpent = orders.reduce((sum, order) => {
+      const price = parseFloat(order.total_price || 0);
+      return sum + (isNaN(price) ? 0 : price);
+    }, 0);
 
-  return res.json({
-    totalSpent,
-    awardedPoints,
-    message: `For $${totalSpent}, you earn ${awardedPoints} points.`
-  });
+    const awardedPoints = Math.floor(totalSpent) * 5;
+
+    return res.json({
+      totalSpent,
+      awardedPoints,
+      message: `You would earn ${awardedPoints} points for $${totalSpent.toFixed(2)} spent.`
+    });
+  } catch (err) {
+    console.error('Error testing totalSpent:', err);
+    return res.status(500).json({ error: 'Server error during totalSpent calculation.' });
+  }
 });
+
 
 
 
