@@ -378,6 +378,21 @@ async function rewardReferrerAfterPurchase(email) {
   }
 }
 
+//TEST PURCHASE
+app.post('/api/debug/test-reward', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Missing email' });
+
+  try {
+    const result = await rewardReferrerAfterPurchase(email);
+    return res.json(result);
+  } catch (err) {
+    console.error('Test reward error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+
 
 
 /********************************************************************
