@@ -185,7 +185,7 @@ const pool = mysql.createPool({
     // Debug: show the "users" table structure
     const [userColumns] = await connection.query('DESCRIBE users');
     console.log('Users table structure:');
-    userColumns.forEach(col => {
+    userColumns.forEach(col => { 
       console.log(`  ${col.Field}: ${col.Type} ${col.Null === 'YES' ? 'NULL' : 'NOT NULL'} ${col.Key}`);
     });
 
