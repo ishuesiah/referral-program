@@ -285,54 +285,51 @@ app.post('/api/referral/check-purchase', async (req, res) => {
 /********************************************************************
  * rewardReferrerAfterPurchase
  ********************************************************************/
-async function rewardReferrerAfterPurchase(email) {
+async function rewardReferrerAfterPurchase(email, orderId) { // Add orderId parameter
   const shop = 'hemlock-oak.myshopify.com';
   const accessToken = process.env.SHOPIFY_ADMIN_TOKEN;
 
   // Step 1: Lookup referred user
   const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
   if (users.length === 0) return { error: 'User not found.' };
-
   const referredUser = users[0];
 
-  // Step 2: Query Shopify orders using stored shopify_customer_id
-  const customerId = referredUser.shopify_customer_id;
-  const ordersRes = await fetch(`https://${shop}/admin/api/2023-07/orders.json?customer_id=${customerId}&status=any`, {
+  // Step 2: Fetch SPECIFIC order by ID
+  const orderRes = await fetch(`https://${shop}/admin/api/2023-07/orders/${orderId}.json`, {
     headers: {
       'X-Shopify-Access-Token': accessToken,
       'Content-Type': 'application/json'
     }
   });
-  const ordersData = await ordersRes.json();
-  if (!ordersData.orders || ordersData.orders.length === 0) {
-    return { message: 'No purchase yet.' };
+  
+  const orderData = await orderRes.json();
+  const order = orderData.order;
+  
+  if (!order) {
+    return { error: 'Order not found.' };
   }
 
   const connection = await pool.getConnection();
   try {
-    // Step 3: Award points to purchaser — 5 points per 1 CAD spent
-   const totalSpent = ordersData.orders.reduce(
-  (sum, order) => sum + Number(order.total_price || 0),
-  0
-);
+    // Step 3: Award points for THIS ORDER ONLY
+    const orderTotal = parseFloat(order.total_price || 0);
+    const pointsPerDollar = 5;
+    const awardedPoints = Math.floor(orderTotal) * pointsPerDollar;
 
-console.log('ordersData.orders.length:', ordersData.orders.length);
-console.log('totalSpent:', totalSpent);
+    console.log('Processing order:', order.order_number);
+    console.log('Order total:', orderTotal);
+    console.log('Awarded points:', awardedPoints);
 
-const pointsPerDollar = 5;
-const awardedPoints = Math.floor(totalSpent) * pointsPerDollar;
-console.log('awardedPoints:', awardedPoints);
+    await connection.execute(
+      'UPDATE users SET points = points + ? WHERE user_id = ?',
+      [awardedPoints, referredUser.user_id]
+    );
 
-// then your UPDATE…
-await connection.execute(
-  'UPDATE users SET points = points + ? WHERE user_id = ?',
-  [awardedPoints, referredUser.user_id]
-);
-
-    await connection.execute(`
-      INSERT INTO user_actions (user_id, action_type, points_awarded)
-      VALUES (?, 'purchase_points_award', ?)
-    `, [referredUser.user_id, awardedPoints]);
+    await connection.execute(
+      `INSERT INTO user_actions (user_id, action_type, points_awarded, related_order_id)
+       VALUES (?, 'purchase_points_award', ?, ?)`,
+      [referredUser.user_id, awardedPoints, orderId] // Store order ID with action
+    );
 
     let referrerMessage = 'No referrer, so no additional reward.';
 
@@ -582,6 +579,9 @@ app.get('/api/debug/referral-user/:email', async (req, res) => {
 
 app.post('/api/shopify/order-webhook', express.json(), async (req, res) => {
   const order = req.body;
+  const email = order.email;
+  const orderId = order.id; // Get order ID from webhook
+
 
   try {
     const email = order.email;
@@ -590,22 +590,18 @@ app.post('/api/shopify/order-webhook', express.json(), async (req, res) => {
 
     // ✅ Always trigger reward logic based on email
     if (email) {
-      console.log(`[Webhook] Checking purchase for ${email}`);
+      console.log(`[Webhook] Processing order ${orderId} for ${email}`);
 
-        if (email) {
-          await fetch(
-            'https://…/api/referral/award-purchase',
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                email,
-                orderId: order.id,
-                totalPrice: order.total_price
-              })
-            }
-          );
-        }
+      const rewardRes = await rewardReferrerAfterPurchase(email, orderId);
+      console.log('[Webhook] Reward response:', rewardRes);
+
+      const rewardRes = await fetch('https://referral-program-448vr.kinsta.app/api/referral/check-purchase', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email })
+      });
 
       const rewardResult = await rewardRes.json();
       console.log(`[Webhook] Reward response:`, rewardResult);
@@ -644,86 +640,6 @@ if (usedCode) {
   }
 });
 
-/********************************************************************
- * New webhook for awarding purchaser
- ********************************************************************/
-app.post('/api/referral/award-purchase', async (req, res) => {
-  const { email, orderId, totalPrice } = req.body;
-  if (!email || !orderId || totalPrice == null) {
-    return res.status(400).json({ error: 'Missing email, orderId or totalPrice' });
-  }
-
-  const connection = await pool.getConnection();
-  try {
-    // 1) lookup user
-    const [users] = await connection.execute(
-      'SELECT * FROM users WHERE email = ?', [email]
-    );
-    if (!users.length) return res.status(404).json({ error: 'User not found.' });
-    const user = users[0];
-
-    // 2) idempotency: skip if we’ve already awarded this order
-    const [existing] = await connection.execute(`
-      SELECT * FROM user_actions
-      WHERE user_id = ? AND action_type = 'purchase_points_award' AND action_ref = ?
-    `, [user.user_id, orderId]);
-    if (existing.length) {
-      return res.json({ message: 'Order already processed.' });
-    }
-
-    // 3) compute points & award
-    const points = Math.floor(Number(totalPrice)) * 5;
-    await connection.execute(
-      'UPDATE users SET points = points + ? WHERE user_id = ?',
-      [points, user.user_id]
-    );
-    await connection.execute(`
-      INSERT INTO user_actions
-        (user_id, action_type, points_awarded, action_ref)
-      VALUES (?, 'purchase_points_award', ?, ?)
-    `, [user.user_id, points, orderId]);
-
-    // 4) now handle the one-time referrer bonus if any
-    let referrerMessage = 'No referrer, so no additional reward.';
-    if (user.referred_by) {
-      const [[ref]] = await connection.execute(
-        'SELECT * FROM users WHERE referral_code = ?', [user.referred_by]
-      );
-      if (ref) {
-        // only on first purchase (no prior 'referral_purchase_award')
-        const [prior] = await connection.execute(`
-          SELECT * FROM user_actions
-          WHERE user_id = ? AND action_type = 'referral_purchase_award'
-        `, [user.user_id]);
-        if (!prior.length) {
-          await connection.execute(
-            'UPDATE users SET points = points + 5 WHERE user_id = ?',
-            [ref.user_id]
-          );
-          await connection.execute(`
-            INSERT INTO user_actions
-              (user_id, action_type, points_awarded, action_ref)
-            VALUES (?, 'referral_purchase_award', 5, ?)
-          `, [user.user_id, orderId]);
-          referrerMessage = `Awarded 5 points to referrer ${ref.email}.`;
-        } else {
-          referrerMessage = 'Referrer already rewarded.';
-        }
-      }
-    }
-
-    return res.json({
-      message: `Awarded ${points} points to purchaser ${email}.`,
-      referrerMessage
-    });
-
-  } catch (err) {
-    console.error('award-purchase error:', err);
-    return res.status(500).json({ error: 'Server error.' });
-  } finally {
-    connection.release();
-  }
-});
 
 
 /********************************************************************
