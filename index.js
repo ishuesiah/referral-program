@@ -294,6 +294,13 @@ async function rewardReferrerAfterPurchase(email, orderId) {
     return { error: 'Order not found.' };
   }
 
+  // Check if order is paid
+  if (order.financial_status !== 'paid') {
+    return { 
+      message: `Order #${order.order_number} not paid (status: ${order.financial_status}). No points awarded.`
+    };
+  }
+
   const connection = await pool.getConnection();
   try {
     // Check if order already processed
@@ -313,9 +320,16 @@ async function rewardReferrerAfterPurchase(email, orderId) {
     }
 
     // Step 3: Award points for THIS ORDER ONLY
-    const orderTotal = parseFloat(order.total_price || 0);
+    // Parse total_price as float and handle NaN cases
+    const orderTotal = parseFloat(order.total_price);
+    if (isNaN(orderTotal)) {
+      console.error('Invalid order total:', order.total_price);
+      return { error: 'Invalid order total value.' };
+    }
+
     const pointsPerDollar = 5;
-    const awardedPoints = Math.floor(orderTotal) * pointsPerDollar;
+    // Multiply by pointsPerDollar without flooring
+    const awardedPoints = Math.round(orderTotal * pointsPerDollar);
 
     console.log('Processing order:', order.order_number);
     console.log('Order total:', orderTotal);
