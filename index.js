@@ -632,58 +632,40 @@ app.get('/api/debug/referral-user/:email', async (req, res) => {
 app.post('/api/shopify/order-webhook', express.json(), async (req, res) => {
   const order = req.body;
   const email = order.email;
-  const orderId = order.id; // Get order ID from webhook
-
+  const orderId = order.id;
+  const discountCodes = (order.discount_codes || []).map(dc => dc.code);
+  const usedCode = discountCodes.find(code => code.startsWith('POINTS'));
 
   try {
-    const email = order.email;
-    const discountCodes = (order.discount_codes || []).map(dc => dc.code);
-    const usedCode = discountCodes.find(code => code.startsWith('POINTS'));
-
-    // ✅ Always trigger reward logic based on email
-    if (email) {
+    // Process purchase rewards
+    if (email && orderId) {
       console.log(`[Webhook] Processing order ${orderId} for ${email}`);
-
-      const rewardRes = await rewardReferrerAfterPurchase(email, orderId);
-      console.log('[Webhook] Reward response:', rewardRes);
-
-      const rewardRes = await fetch('https://referral-program-448vr.kinsta.app/api/referral/check-purchase', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email })
-      });
-
-      const rewardResult = await rewardRes.json();
-      console.log(`[Webhook] Reward response:`, rewardResult);
+      const rewardResult = await rewardReferrerAfterPurchase(email, orderId);
+      console.log('[Webhook] Reward response:', rewardResult);
     }
 
-    // ✅ Optional: still check & clean up discount code
-if (usedCode) {
-  const checkResponse = await fetch(`https://referral-program-448vr.kinsta.app/api/check-discount-used?code=${usedCode}`);
-  const checkResult = await checkResponse.json();
-  console.log(`[Webhook] Discount check result:`, checkResult);
+    // Clean up discount code
+    if (usedCode) {
+      const checkResponse = await fetch(`https://referral-program-448vr.kinsta.app/api/check-discount-used?code=${usedCode}`);
+      const checkResult = await checkResponse.json();
+      console.log(`[Webhook] Discount check result:`, checkResult);
 
-  // ✅ NEW: If Shopify says "not found", we assume it was used and expired
-  const shouldClear = checkResult.used || checkResult.error === 'Discount code not found in Shopify.';
+      const shouldClear = checkResult.used || checkResult.error === 'Discount code not found in Shopify.';
 
-  if (shouldClear) {
-    const clearCodeRes = await fetch(`https://reviews-kettd.kinsta.app/api/referral/mark-discount-used`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: email,
-        usedCode: usedCode
-      })
-    });
+      if (shouldClear) {
+        const clearCodeRes = await fetch(`https://reviews-kettd.kinsta.app/api/referral/mark-discount-used`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email,
+            usedCode: usedCode
+          })
+        });
 
-    const clearResult = await clearCodeRes.json();
-    console.log(`[Webhook] Code cleared:`, clearResult);
-  }
-}
-
-
+        const clearResult = await clearCodeRes.json();
+        console.log(`[Webhook] Code cleared:`, clearResult);
+      }
+    }
 
     res.status(200).send('OK');
   } catch (err) {
@@ -691,6 +673,7 @@ if (usedCode) {
     res.status(500).send('Webhook failed');
   }
 });
+
 
 
 
