@@ -5,12 +5,13 @@ const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
 const crypto = require('crypto');
-const fetch = require('node-fetch');
-require('dotenv').config();
+const fetch = require('node-fetch'); // Ensure you've installed node-fetch (or use Node 18+ built-in fetch)
+require('dotenv').config(); // Load environment variables from .env
 const app = express();
 
-// Environment variables
+// Your private Klaviyo API key is now securely loaded from the environment
 const KLAVIYO_API_KEY = process.env.KLAVIYO_API_KEY;
+// The Klaviyo list ID you want to add users to
 const KLAVIYO_LIST_ID = 'Vc2WdM';
 
 /********************************************************************
@@ -21,13 +22,9 @@ async function createKlaviyoProfile(email, firstName) {
   const payload = {
     data: {
       type: "profile",
-      attributes: {
-        email: email,
-        first_name: firstName
-      }
+      attributes: { email, first_name: firstName }
     }
   };
-
   const revisionHeader = '2023-12-15';
 
   const response = await fetch(klaviyoCreateProfileUrl, {
@@ -44,16 +41,14 @@ async function createKlaviyoProfile(email, firstName) {
     const errorText = await response.text();
     try {
       const errorJSON = JSON.parse(errorText);
-      if (errorJSON.errors &&
-          errorJSON.errors[0].code === "duplicate_profile" &&
-          errorJSON.errors[0].meta &&
-          errorJSON.errors[0].meta.duplicate_profile_id) {
-        console.log("Profile already exists. Using duplicate profile id: " + errorJSON.errors[0].meta.duplicate_profile_id);
+      if (errorJSON.errors?.[0].code === "duplicate_profile" && errorJSON.errors[0].meta?.duplicate_profile_id) {
+        console.log("Profile already exists. Using duplicate id: " + errorJSON.errors[0].meta.duplicate_profile_id);
         return errorJSON.errors[0].meta.duplicate_profile_id;
       }
-    } catch (e) {}
-    throw new Error('Klaviyo create profile error: ' + errorText);
+    } catch {}
+    throw new Error('Klaviyo create error: ' + errorText);
   }
+
   const result = await response.json();
   return result.data.id;
 }
@@ -63,15 +58,7 @@ async function createKlaviyoProfile(email, firstName) {
  ********************************************************************/
 async function addProfileToList(klaviyoProfileId, email) {
   const klaviyoUrl = `https://a.klaviyo.com/api/lists/${KLAVIYO_LIST_ID}/relationships/profiles`;
-  const payload = {
-    data: [
-      {
-        type: "profile",
-        id: klaviyoProfileId
-      }
-    ]
-  };
-
+  const payload = { data: [{ type: "profile", id: klaviyoProfileId }] };
   const revisionHeader = '2023-12-15';
 
   const response = await fetch(klaviyoUrl, {
@@ -84,27 +71,20 @@ async function addProfileToList(klaviyoProfileId, email) {
     body: JSON.stringify(payload)
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Klaviyo add-to-list error:', errorText);
-  } else {
-    console.log(`Successfully added ${email} (profile id: ${klaviyoProfileId}) to Klaviyo list ${KLAVIYO_LIST_ID}.`);
-  }
+  if (!response.ok) console.error('Klaviyo add-to-list error:', await response.text());
 }
 
 /********************************************************************
  * Combined function to ensure the profile exists and is added to the list
  ********************************************************************/
 async function subscribeToKlaviyoList(email, firstName) {
-  let klaviyoProfileId;
   try {
-    klaviyoProfileId = await createKlaviyoProfile(email, firstName);
-    console.log(`Created or retrieved Klaviyo profile with id: ${klaviyoProfileId}`);
-  } catch (error) {
-    console.error('Error creating Klaviyo profile:', error);
-    return;
+    const profileId = await createKlaviyoProfile(email, firstName);
+    console.log(`Got Klaviyo profile id: ${profileId}`);
+    await addProfileToList(profileId, email);
+  } catch (err) {
+    console.error('Klaviyo subscription error:', err);
   }
-  await addProfileToList(klaviyoProfileId, email);
 }
 
 /********************************************************************
@@ -121,7 +101,7 @@ app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: '2mb' }));
 
-// Database connection pool
+// Set up the database connection pool
 const pool = mysql.createPool({
   host: 'northamerica-northeast1-001.proxy.kinsta.app',
   port: 30387,
@@ -136,14 +116,9 @@ const pool = mysql.createPool({
 (async function testConnection() {
   try {
     const connection = await pool.getConnection();
-    console.log('✅ Successfully connected to referral_program database!');
-    
-    // Debug: list available tables
-    const [tables] = await connection.query('SHOW TABLES');
-    console.log('Available tables:', tables.map(t => Object.values(t)[0]));
+    console.log('✅ Connected to referral_program_db');
 
-    // Create the "users" table
-    const createUsersTableQuery = 
+    await connection.execute(
       `CREATE TABLE IF NOT EXISTS users (
         user_id INT AUTO_INCREMENT PRIMARY KEY,
         shopify_customer_id VARCHAR(255) DEFAULT NULL,
@@ -154,303 +129,207 @@ const pool = mysql.createPool({
         referred_by VARCHAR(50) DEFAULT NULL,
         last_discount_code VARCHAR(50) DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );`;
-    await connection.execute(createUsersTableQuery);
-    console.log('Users table is set up.');
+      );`
+    );
 
-    // Create the "user_actions" table
-    const createUserActionsTableQuery = `
-      CREATE TABLE IF NOT EXISTS user_actions (
+    await connection.execute(
+      `CREATE TABLE IF NOT EXISTS user_actions (
         action_id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
         action_type VARCHAR(50) NOT NULL,
         points_awarded INT DEFAULT 0,
-        related_order_id VARCHAR(255) DEFAULT NULL,
+        action_ref VARCHAR(255) DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(user_id)
-      );
-    `;
-    await connection.execute(createUserActionsTableQuery);
-    console.log('User actions table is set up.');
-
-    // Add related_order_id column if it doesn't exist
-    try {
-      await connection.execute(`
-        ALTER TABLE user_actions 
-        ADD COLUMN IF NOT EXISTS related_order_id VARCHAR(255) DEFAULT NULL
-      `);
-      console.log('Ensured related_order_id column exists');
-    } catch (alterErr) {
-      console.log('related_order_id column already exists or could not be added');
-    }
+      );`
+    );
 
     connection.release();
   } catch (err) {
-    console.error('❌ Database connection error:', err);
+    console.error('DB init error:', err);
     process.exit(1);
   }
 })();
 
 /********************************************************************
- * Simple root route to confirm the server is running
+ * Simple root route
  ********************************************************************/
-app.get('/', (req, res) => {
-  res.send('Referral Program API is up and running!');
-});
+app.get('/', (req, res) => res.send('Referral Program API is up'));
 
 /********************************************************************
  * POST /api/referral/signup
  ********************************************************************/
 app.post('/api/referral/signup', async (req, res) => {
   try {
-    console.log('=== REFERRAL SIGNUP ===');
     const { email, firstName, referredBy, shopifyCustomerId } = req.body;
-    
-    if (!email || !firstName) {
-      return res.status(400).json({ error: 'First name and email are required.' });
-    }
-    
+    if (!email || !firstName) return res.status(400).json({ error: 'Email & firstName required' });
+
     const referralCode = generateReferralCode();
     const initialPoints = 5;
-    
-    if (referredBy) {
-      console.log(`Referred by ${referredBy}, will track purchase-based reward.`);
-    }
-    
-    const sql = `
-      INSERT INTO users (first_name, email, points, referral_code, referred_by, shopify_customer_id)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `;
-    const [result] = await pool.execute(sql, [firstName, email, initialPoints, referralCode, referredBy || null, shopifyCustomerId || null]);
-    console.log('Signup insert result:', result);
-    
-    subscribeToKlaviyoList(email, firstName)
-      .catch(err => {
-        console.error('Klaviyo subscription error:', err);
-      });
-    
-    const referralUrl = `https://www.hemlockandoak.com/pages/email-signup/?ref=${referralCode}`;
-    
+
+    const [result] = await pool.execute(
+      `INSERT INTO users 
+        (first_name,email,points,referral_code,referred_by,shopify_customer_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [firstName, email, initialPoints, referralCode, referredBy||null, shopifyCustomerId||null]
+    );
+
+    subscribeToKlaviyoList(email, firstName);
+
     return res.status(201).json({
-      message: 'User signed up successfully!',
+      message: 'User signed up',
       userId: result.insertId,
       points: initialPoints,
-      referralCode: referralCode,
-      referralUrl: referralUrl
+      referralCode,
+      referralUrl: `https://www.hemlockandoak.com/pages/email-signup/?ref=${referralCode}`
     });
   } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: 'User already exists.' });
-    }
-    console.error('Database error during signup:', err);
-    return res.status(500).json({ error: 'Database error: ' + err.message });
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'User exists' });
+    console.error('Signup error:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
 /********************************************************************
- * POST /api/referral/check-purchase (Updated to accept orderId)
+ * POST /api/referral/check-purchase (legacy)
  ********************************************************************/
 app.post('/api/referral/check-purchase', async (req, res) => {
-  const { email, orderId } = req.body;
-  if (!email || !orderId) {
-    return res.status(400).json({ error: 'Email and order ID required.' });
-  }
-
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
   try {
-    const result = await rewardReferrerAfterPurchase(email, orderId);
+    const result = await rewardReferrerAfterPurchase(email);
     return res.json(result);
   } catch (err) {
-    console.error('Error checking referral purchase:', err);
-    return res.status(500).json({ error: 'Server error.' });
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
 /********************************************************************
- * UPDATED rewardReferrerAfterPurchase function
- * Now processes only a specific order by ID
+ * rewardReferrerAfterPurchase (legacy)
  ********************************************************************/
-async function rewardReferrerAfterPurchase(email, orderId) {
+async function rewardReferrerAfterPurchase(email) {
   const shop = 'hemlock-oak.myshopify.com';
   const accessToken = process.env.SHOPIFY_ADMIN_TOKEN;
 
-  // Step 1: Lookup referred user
   const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
-  if (users.length === 0) return { error: 'User not found.' };
-
+  if (!users.length) return { error: 'User not found' };
   const referredUser = users[0];
 
-  // Step 2: Fetch SPECIFIC order by ID
-  const orderRes = await fetch(`https://${shop}/admin/api/2023-07/orders/${orderId}.json`, {
-    headers: {
-      'X-Shopify-Access-Token': accessToken,
-      'Content-Type': 'application/json'
-    }
-  });
-  
-  const orderData = await orderRes.json();
-  const order = orderData.order;
-  
-  if (!order) {
-    return { error: 'Order not found.' };
+  const ordersRes = await fetch(
+    `https://${shop}/admin/api/2023-07/orders.json?customer_id=${referredUser.shopify_customer_id}&status=any`,
+    { headers: { 'X-Shopify-Access-Token': accessToken }}
+  );
+  const ordersData = await ordersRes.json();
+  if (!ordersData.orders?.length) return { message: 'No purchase yet.' };
+
+  // Legacy sums all orders — recommend using /award-purchase instead
+  const totalSpent = ordersData.orders.reduce((sum, o) => sum + Number(o.total_price||0), 0);
+  console.log('Legacy totalSpent:', totalSpent);
+  const awardedPoints = Math.floor(totalSpent) * 5;
+
+  const conn = await pool.getConnection();
+  await conn.execute('UPDATE users SET points = points + ? WHERE user_id = ?', [awardedPoints, referredUser.user_id]);
+  await conn.execute(
+    'INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref) VALUES (?, ?, ?, ?)',
+    [referredUser.user_id, 'purchase_points_award', awardedPoints, null]
+  );
+  conn.release();
+
+  return { message: `Awarded ${awardedPoints} points to ${email}.`, referrerMessage: 'No referrer logic here' };
+}
+
+/********************************************************************
+ * NEW: POST /api/referral/award-purchase
+ * Handles a single order's reward
+ ********************************************************************/
+app.post('/api/referral/award-purchase', async (req, res) => {
+  const { email, orderId, totalPrice } = req.body;
+  if (!email || !orderId || totalPrice == null) {
+    return res.status(400).json({ error: 'Email, orderId & totalPrice required' });
   }
 
-  // Check if order is paid
-  if (order.financial_status !== 'paid') {
-    return { 
-      message: `Order #${order.order_number} not paid (status: ${order.financial_status}). No points awarded.`
-    };
-  }
-
-  const connection = await pool.getConnection();
+  const conn = await pool.getConnection();
   try {
-    // Check if order already processed
-    const [existingActions] = await connection.execute(
-      `SELECT * FROM user_actions 
-       WHERE user_id = ? 
-       AND related_order_id = ? 
-       AND action_type = 'purchase_points_award'`,
-      [referredUser.user_id, orderId]
-    );
+    const [users] = await conn.execute('SELECT * FROM users WHERE email = ?', [email]);
+    if (!users.length) return res.status(404).json({ error: 'User not found' });
+    const user = users[0];
 
-    if (existingActions.length > 0) {
-      return { 
-        message: `Order ${orderId} already processed. No points awarded.`,
-        referrerMessage: 'Skipped because order already processed.'
-      };
+    // Idempotency: skip if this order was already rewarded
+    const [exists] = await conn.execute(
+      `SELECT * FROM user_actions WHERE user_id = ? AND action_ref = ? AND action_type = 'purchase_points_award'`,
+      [user.user_id, orderId]
+    );
+    if (exists.length) {
+      return res.json({ message: 'Order already processed' });
     }
 
-    // Step 3: Award points for THIS ORDER ONLY
-    // Parse total_price as float and handle NaN cases
-    const orderTotal = parseFloat(order.total_price);
-    if (isNaN(orderTotal)) {
-      console.error('Invalid order total:', order.total_price);
-      return { error: 'Invalid order total value.' };
-    }
-
-    const pointsPerDollar = 5;
-    // Multiply by pointsPerDollar without flooring
-    const awardedPoints = Math.round(orderTotal * pointsPerDollar);
-
-    console.log('Processing order:', order.order_number);
-    console.log('Order total:', orderTotal);
-    console.log('Awarded points:', awardedPoints);
-
-    await connection.execute(
-      'UPDATE users SET points = points + ? WHERE user_id = ?',
-      [awardedPoints, referredUser.user_id]
-    );
-
-    await connection.execute(
-      `INSERT INTO user_actions (user_id, action_type, points_awarded, related_order_id)
+    const points = Math.floor(Number(totalPrice)) * 5;
+    await conn.execute('UPDATE users SET points = points + ? WHERE user_id = ?', [points, user.user_id]);
+    await conn.execute(
+      `INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref)
        VALUES (?, 'purchase_points_award', ?, ?)`,
-      [referredUser.user_id, awardedPoints, orderId]
+      [user.user_id, points, orderId]
     );
 
-    let referrerMessage = 'No referrer, so no additional reward.';
-
-    // Step 4: One-time bonus to referrer on first purchase
-    if (referredUser.referred_by) {
-      const [referrerRows] = await connection.execute(
-        'SELECT * FROM users WHERE referral_code = ?',
-        [referredUser.referred_by]
+    // One-time referrer bonus
+    let refMsg = 'No referrer';
+    if (user.referred_by) {
+      const [[referrer]] = await conn.execute(
+        'SELECT * FROM users WHERE referral_code = ?', [user.referred_by]
       );
-
-      if (referrerRows.length > 0) {
-        const referrer = referrerRows[0];
-
-        const [existingActions] = await connection.execute(
-          `SELECT * FROM user_actions
-           WHERE user_id = ? 
-           AND action_type = 'referral_purchase_award'
-           AND related_order_id = ?`,
-          [referredUser.user_id, orderId]
+      if (referrer) {
+        const [prior] = await conn.execute(
+          `SELECT * FROM user_actions WHERE user_id = ? AND action_type = 'referral_purchase_award'`,
+          [user.user_id]
         );
-
-        if (existingActions.length === 0) {
-          await connection.execute(`
-            UPDATE users
-            SET points = points + 5,
-                referral_purchases_count = referral_purchases_count + 1
-            WHERE user_id = ?
-          `, [referrer.user_id]);
-
-          await connection.execute(`
-            INSERT INTO user_actions (user_id, action_type, points_awarded, related_order_id)
-            VALUES (?, 'referral_purchase_award', 5, ?)
-          `, [referredUser.user_id, orderId]);
-
-          await connection.execute(
-            'UPDATE users SET referral_count = referral_count + 1 WHERE user_id = ?',
-            [referrer.user_id]
+        if (!prior.length) {
+          await conn.execute('UPDATE users SET points = points + 5 WHERE user_id = ?', [referrer.user_id]);
+          await conn.execute(
+            `INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref)
+             VALUES (?, 'referral_purchase_award', 5, ?)`,
+            [user.user_id, orderId]
           );
-
-          referrerMessage = `Awarded 5 points to referrer ${referrer.email} for order ${orderId}.`;
+          refMsg = `Awarded 5 points to referrer ${referrer.email}`;
         } else {
-          referrerMessage = 'Referrer already rewarded for this order.';
+          refMsg = 'Referrer already rewarded';
         }
       }
     }
 
-    return {
-      message: `Awarded ${awardedPoints} points for order #${order.order_number} to ${referredUser.email}.`,
-      referrerMessage
-    };
+    res.json({ message: `Awarded ${points} to purchaser ${email}`, referrerMessage: refMsg });
   } catch (err) {
-    console.error('Error rewarding referrer:', err);
-    return { error: 'Unexpected error occurred.' };
+    console.error('award-purchase error:', err);
+    res.status(500).json({ error: 'Server error' });
   } finally {
-    connection.release();
+    conn.release();
   }
-}
+});
 
 /********************************************************************
- * UPDATED Shopify Order Webhook
- * Now processes only the specific order from the webhook
+ * POST /api/shopify/order-webhook
+ * Now extracts single order from webhook
  ********************************************************************/
 app.post('/api/shopify/order-webhook', express.json(), async (req, res) => {
   const order = req.body;
-  const email = order.email;
-  const orderId = order.id;
-  const discountCodes = (order.discount_codes || []).map(dc => dc.code);
-  const usedCode = discountCodes.find(code => code.startsWith('POINTS'));
-
   try {
-    // Process purchase rewards
-    if (email && orderId) {
-      console.log(`[Webhook] Processing order ${orderId} for ${email}`);
-      const rewardResult = await rewardReferrerAfterPurchase(email, orderId);
-      console.log('[Webhook] Reward response:', rewardResult);
+    const email = order.email;
+    const orderId = order.id;
+    const totalPrice = order.total_price;
+    if (email && orderId != null && totalPrice != null) {
+      await fetch('https://referral-program-448vr.kinsta.app/api/referral/award-purchase', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ email, orderId, totalPrice })
+      });
     }
-
-    // Clean up discount code
-    if (usedCode) {
-      const checkResponse = await fetch(`https://referral-program-448vr.kinsta.app/api/check-discount-used?code=${usedCode}`);
-      const checkResult = await checkResponse.json();
-      console.log(`[Webhook] Discount check result:`, checkResult);
-
-      const shouldClear = checkResult.used || checkResult.error === 'Discount code not found in Shopify.';
-
-      if (shouldClear) {
-        const clearCodeRes = await fetch(`https://reviews-kettd.kinsta.app/api/referral/mark-discount-used`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: email,
-            usedCode: usedCode
-          })
-        });
-
-        const clearResult = await clearCodeRes.json();
-        console.log(`[Webhook] Code cleared:`, clearResult);
-      }
-    }
-
-    res.status(200).send('OK');
+    res.sendStatus(200);
   } catch (err) {
-    console.error('❌ Webhook error:', err.message);
-    res.status(500).send('Webhook failed');
+    console.error('Webhook handler error:', err);
+    res.sendStatus(500);
   }
 });
+
 //TEST PURCHASE
 app.post('/api/test-total-spent', async (req, res) => {
   const { orders } = req.body;
