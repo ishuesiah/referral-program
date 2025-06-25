@@ -592,13 +592,20 @@ app.post('/api/shopify/order-webhook', express.json(), async (req, res) => {
     if (email) {
       console.log(`[Webhook] Checking purchase for ${email}`);
 
-      const rewardRes = await fetch('https://referral-program-448vr.kinsta.app/api/referral/check-purchase', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email })
-      });
+        if (email) {
+          await fetch(
+            'https://…/api/referral/award-purchase',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email,
+                orderId: order.id,
+                totalPrice: order.total_price
+              })
+            }
+          );
+        }
 
       const rewardResult = await rewardRes.json();
       console.log(`[Webhook] Reward response:`, rewardResult);
@@ -637,6 +644,86 @@ if (usedCode) {
   }
 });
 
+/********************************************************************
+ * New webhook for awarding purchaser
+ ********************************************************************/
+app.post('/api/referral/award-purchase', async (req, res) => {
+  const { email, orderId, totalPrice } = req.body;
+  if (!email || !orderId || totalPrice == null) {
+    return res.status(400).json({ error: 'Missing email, orderId or totalPrice' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    // 1) lookup user
+    const [users] = await connection.execute(
+      'SELECT * FROM users WHERE email = ?', [email]
+    );
+    if (!users.length) return res.status(404).json({ error: 'User not found.' });
+    const user = users[0];
+
+    // 2) idempotency: skip if we’ve already awarded this order
+    const [existing] = await connection.execute(`
+      SELECT * FROM user_actions
+      WHERE user_id = ? AND action_type = 'purchase_points_award' AND action_ref = ?
+    `, [user.user_id, orderId]);
+    if (existing.length) {
+      return res.json({ message: 'Order already processed.' });
+    }
+
+    // 3) compute points & award
+    const points = Math.floor(Number(totalPrice)) * 5;
+    await connection.execute(
+      'UPDATE users SET points = points + ? WHERE user_id = ?',
+      [points, user.user_id]
+    );
+    await connection.execute(`
+      INSERT INTO user_actions
+        (user_id, action_type, points_awarded, action_ref)
+      VALUES (?, 'purchase_points_award', ?, ?)
+    `, [user.user_id, points, orderId]);
+
+    // 4) now handle the one-time referrer bonus if any
+    let referrerMessage = 'No referrer, so no additional reward.';
+    if (user.referred_by) {
+      const [[ref]] = await connection.execute(
+        'SELECT * FROM users WHERE referral_code = ?', [user.referred_by]
+      );
+      if (ref) {
+        // only on first purchase (no prior 'referral_purchase_award')
+        const [prior] = await connection.execute(`
+          SELECT * FROM user_actions
+          WHERE user_id = ? AND action_type = 'referral_purchase_award'
+        `, [user.user_id]);
+        if (!prior.length) {
+          await connection.execute(
+            'UPDATE users SET points = points + 5 WHERE user_id = ?',
+            [ref.user_id]
+          );
+          await connection.execute(`
+            INSERT INTO user_actions
+              (user_id, action_type, points_awarded, action_ref)
+            VALUES (?, 'referral_purchase_award', 5, ?)
+          `, [user.user_id, orderId]);
+          referrerMessage = `Awarded 5 points to referrer ${ref.email}.`;
+        } else {
+          referrerMessage = 'Referrer already rewarded.';
+        }
+      }
+    }
+
+    return res.json({
+      message: `Awarded ${points} points to purchaser ${email}.`,
+      referrerMessage
+    });
+
+  } catch (err) {
+    console.error('award-purchase error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  } finally {
+    connection.release();
+  }
+});
 
 
 /********************************************************************
