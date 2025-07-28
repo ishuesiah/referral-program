@@ -120,16 +120,25 @@ const pool = mysql.createPool({
 
     await connection.execute(
       `CREATE TABLE IF NOT EXISTS users (
-        user_id INT AUTO_INCREMENT PRIMARY KEY,
-        shopify_customer_id VARCHAR(255) DEFAULT NULL,
-        first_name VARCHAR(255) DEFAULT NULL,
-        email VARCHAR(255) NOT NULL UNIQUE,
-        points INT DEFAULT 0,
-        referral_code VARCHAR(50) UNIQUE,
-        referred_by VARCHAR(50) DEFAULT NULL,
-        last_discount_code VARCHAR(50) DEFAULT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );`
+  user_id                      INT AUTO_INCREMENT PRIMARY KEY,
+  shopify_customer_id          VARCHAR(255)     DEFAULT NULL,
+  first_name                   VARCHAR(255)     DEFAULT NULL,
+  last_name                    VARCHAR(255)     DEFAULT NULL,
+  email                        VARCHAR(255)     NOT NULL UNIQUE,
+  date_of_birth                DATE             DEFAULT NULL,
+  membership_status            VARCHAR(50)      DEFAULT NULL,
+  vip_tier_name                VARCHAR(100)     DEFAULT NULL,
+  points                       INT              DEFAULT 0,
+  referral_count               INT              DEFAULT 0,
+  referral_purchases_count     INT              DEFAULT 0,
+  referral_code                VARCHAR(50)      UNIQUE,
+  referral_discount_code       VARCHAR(50)      DEFAULT NULL,
+  discount_code_id             INT              DEFAULT NULL,
+  referred_by                  VARCHAR(50)      DEFAULT NULL,
+  last_discount_code           VARCHAR(50)      DEFAULT NULL,
+  created_at                   DATETIME         DEFAULT CURRENT_TIMESTAMP
+);
+`
     );
 
     await connection.execute(
