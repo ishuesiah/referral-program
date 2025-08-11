@@ -419,14 +419,13 @@ app.post('/api/referral/award', async (req, res) => {
     }
     const user = users[0];
 
-    if (action === 'social_media_follow') {
-      const [existingBonus] = await pool.execute(
-        'SELECT * FROM user_actions WHERE user_id = ? AND action_type = ?',
-        [user.user_id, action]
-      );
-      if (existingBonus.length > 0) {
-        return res.status(400).json({ error: 'Points already claimed.' });
-      }
+    // Duplicate check for ALL actions
+    const [existingBonus] = await pool.execute(
+      'SELECT * FROM user_actions WHERE user_id = ? AND action_type = ?',
+      [user.user_id, action]
+    );
+    if (existingBonus.length > 0) {
+      return res.status(400).json({ error: 'Points already claimed.' });
     }
     
     const pointsToAdd = 50;
@@ -436,13 +435,12 @@ app.post('/api/referral/award', async (req, res) => {
     await pool.execute(updateSql, [newPoints, email]);
     console.log('Award update result for', email);
 
-    const insertActionSql = 
-      'INSERT INTO user_actions (user_id, action_type, points_awarded) VALUES (?, ?, ?)'
-    ;
+    const insertActionSql =
+      'INSERT INTO user_actions (user_id, action_type, points_awarded) VALUES (?, ?, ?)';
     await pool.execute(insertActionSql, [user.user_id, action, pointsToAdd]);
     
     return res.json({
-      message: 'Awarded ${pointsToAdd} points for action "${action}".',
+      message: `Awarded ${pointsToAdd} points for action "${action}".`,
       email: email,
       newPoints: newPoints
     });
@@ -451,6 +449,7 @@ app.post('/api/referral/award', async (req, res) => {
     return res.status(500).json({ error: 'Server error: ' + error.message });
   }
 });
+
 
 
 
