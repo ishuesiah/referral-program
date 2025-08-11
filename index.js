@@ -437,8 +437,8 @@ app.post('/api/referral/award', async (req, res) => {
     console.log('Award update result for', email);
 
     const insertActionSql = 
-      INSERT INTO user_actions (user_id, action_type, points_awarded)
-      VALUES (?, ?, ?)
+      'INSERT INTO user_actions (user_id, action_type, points_awarded)
+      VALUES (?, ?, ?)'
     ;
     await pool.execute(insertActionSql, [user.user_id, action, pointsToAdd]);
     
