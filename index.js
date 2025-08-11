@@ -432,7 +432,7 @@ app.post('/api/referral/award', async (req, res) => {
     const pointsToAdd = 50;
     const newPoints = user.points + pointsToAdd;
     
-    const updateSql = UPDATE users SET points = ? WHERE email = ?;
+    const updateSql = 'UPDATE users SET points = ? WHERE email = ?';
     await pool.execute(updateSql, [newPoints, email]);
     console.log('Award update result for', email);
 
