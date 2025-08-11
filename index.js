@@ -442,7 +442,7 @@ app.post('/api/referral/award', async (req, res) => {
     await pool.execute(insertActionSql, [user.user_id, action, pointsToAdd]);
     
     return res.json({
-      message: `Awarded ${pointsToAdd} points for action "${action}"`.,
+      message: 'Awarded ${pointsToAdd} points for action "${action}".',
       email: email,
       newPoints: newPoints
     });
