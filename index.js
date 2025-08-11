@@ -395,6 +395,39 @@ app.post('/api/test-shopify-orders', async (req, res) => {
   }
 });
 
+/********************************************************************
+ * POST /api/referral/award
+ * Adds referral points for additional actions.
+ * Expects { "email": "user@example.com", "action": "share" }
+ * Currently, each action awards 5 points.
+ ********************************************************************/
+app.get('/api/referral/status', async (req, res) => {
+  try {
+    const email = req.query.email;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required.' });
+    }
+
+    const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    const user = users[0];
+
+    const [actions] = await pool.execute(
+      'SELECT action_type FROM user_actions WHERE user_id = ?',
+      [user.user_id]
+    );
+
+    return res.json({
+      email: email,
+      claimedActions: actions.map(a => a.action_type)
+    });
+  } catch (error) {
+    console.error('Error fetching referral status:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
 
 
 
