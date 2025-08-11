@@ -428,7 +428,7 @@ app.post('/api/referral/award', async (req, res) => {
       }
     }
     
-    const pointsToAdd = 5;
+    const pointsToAdd = 50;
     const newPoints = user.points + pointsToAdd;
     
     const updateSql = `UPDATE users SET points = ? WHERE email = ?`;
