@@ -404,6 +404,7 @@ app.post('/api/test-shopify-orders', async (req, res) => {
  * Expects { "email": "user@example.com", "action": "share" }
  * Currently, each action awards 5 points.
  ********************************************************************/
+// Award once per action, idempotent, works for ALL actions
 app.post('/api/referral/award', async (req, res) => {
   try {
     console.log('=== AWARD REFERRAL POINTS ===');
@@ -411,40 +412,77 @@ app.post('/api/referral/award', async (req, res) => {
     if (!email || !action) {
       return res.status(400).json({ error: 'Email and action are required.' });
     }
-    
-    const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
-    if (users.length === 0) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
-    const user = users[0];
 
-    if (action === 'social_media_follow') {
-      const [existingBonus] = await pool.execute(
-        'SELECT * FROM user_actions WHERE user_id = ? AND action_type = ?',
-        [user.user_id, action]
-      );
-      if (existingBonus.length > 0) {
-        return res.status(400).json({ error: 'Points already claimed.' });
-      }
+    // Map allowed actions to their point values
+    const ACTION_POINTS = {
+      social_media_follow: 50,   // Instagram follow
+      facebook_like: 50,
+      youtube_subscribe: 50,
+      community_join: 50
+    };
+
+    if (!(action in ACTION_POINTS)) {
+      return res.status(400).json({ error: 'Unsupported action.' });
     }
-    
-    const pointsToAdd = 50;
+
+    const [[user]] = await pool.execute('SELECT * FROM users WHERE email = ? LIMIT 1', [email]);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    // Idempotency: has this user already claimed THIS action?
+    const [existing] = await pool.execute(
+      'SELECT 1 FROM user_actions WHERE user_id = ? AND action_type = ? LIMIT 1',
+      [user.user_id, action]
+    );
+    if (existing.length > 0) {
+      // Return 200 so the UI can treat this gracefully
+      return res.json({
+        message: 'Points already claimed.',
+        alreadyClaimed: true,
+        email,
+        newPoints: user.points
+      });
+    }
+
+    const pointsToAdd = ACTION_POINTS[action];
     const newPoints = user.points + pointsToAdd;
-    
-    const updateSql = `UPDATE users SET points = ? WHERE email = ?`;
-    await pool.execute(updateSql, [newPoints, email]);
-    console.log('Award update result for', email);
 
-    const insertActionSql = `
-      INSERT INTO user_actions (user_id, action_type, points_awarded)
-      VALUES (?, ?, ?)
-    `;
-    await pool.execute(insertActionSql, [user.user_id, action, pointsToAdd]);
-    
+    // Award inside a tiny transaction to avoid race conditions
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      await conn.execute(
+        'INSERT INTO user_actions (user_id, action_type, points_awarded) VALUES (?, ?, ?)',
+        [user.user_id, action, pointsToAdd]
+      );
+
+      await conn.execute(
+        'UPDATE users SET points = ? WHERE user_id = ?',
+        [newPoints, user.user_id]
+      );
+
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+
+      // If another request inserted first, treat as already-claimed
+      if (err && err.code === 'ER_DUP_ENTRY') {
+        return res.json({
+          message: 'Points already claimed.',
+          alreadyClaimed: true,
+          email,
+          newPoints: user.points
+        });
+      }
+      throw err;
+    } finally {
+      conn.release();
+    }
+
     return res.json({
       message: `Awarded ${pointsToAdd} points for action "${action}".`,
-      email: email,
-      newPoints: newPoints
+      email,
+      newPoints
     });
   } catch (error) {
     console.error('Error in award endpoint:', error);
@@ -452,7 +490,8 @@ app.post('/api/referral/award', async (req, res) => {
   }
 });
 
-// POST /api/referral/shopify-id
+
+// POST /api/referral/shopify-id 
 // Expects { "email": "user@example.com", "shopifyCustomerId": "gid://shopify/Customer/1234567890" }
 app.post('/api/referral/shopify-id', async (req, res) => {
   try {
