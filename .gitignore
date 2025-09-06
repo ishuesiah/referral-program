@@ -1,0 +1,29 @@
+cat > .gitignore << 'EOF'
+# Environment variables
+.env
+.env.local
+.env.production
+.env.*
+
+# Node modules
+node_modules/
+
+# Mac system files
+.DS_Store
+
+# Log files
+*.log
+
+# Build directories
+dist/
+build/
+
+# IDE files
+.vscode/
+.idea/
+
+# Any config files with secrets
+config.js
+config.json
+secrets/
+EOF
