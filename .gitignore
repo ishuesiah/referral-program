@@ -1,12 +1,12 @@
 cat > .gitignore << 'EOF'
 # Environment variables
+node_modules/
+.DS_Store
+*.log
 .env
 .env.local
 .env.production
 .env.*
-
-# Node modules
-node_modules/
 
 # Mac system files
 .DS_Store
