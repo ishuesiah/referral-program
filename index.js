@@ -111,15 +111,16 @@ app.use(cors({
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: '2mb' }));
 
-// Set up the database connection pool
 const pool = mysql.createPool({
   host: process.env.MYSQL_HOST,
   port: process.env.MYSQL_PORT,
   user: process.env.MYSQL_USER,
   password: process.env.MYSQL_PASSWORD,
-  database: process.env.MYSQL_DATABASE
+  database: process.env.MYSQL_DATABASE,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
-
 /********************************************************************
  * Immediately test the connection and create the necessary tables if they don't exist
  ********************************************************************/
@@ -616,6 +617,24 @@ app.get('/api/check-discount-used', async (req, res) => {
     }
   `;
 
+  app.post('/api/test-points-update', async (req, res) => {
+    const { email, points } = req.body;
+    try {
+      const [result] = await pool.execute(
+        'UPDATE users SET points = points + ? WHERE email = ?',
+        [points, email]
+      );
+      const [user] = await pool.execute('SELECT points FROM users WHERE email = ?', [email]);
+      res.json({ 
+        success: true, 
+        affectedRows: result.affectedRows,
+        newPoints: user[0]?.points 
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+  
   const variables = { code };
 
   try {
