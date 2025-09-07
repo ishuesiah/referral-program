@@ -699,6 +699,72 @@ app.get('/api/check-discount-used', async (req, res) => {
   }
 });
 
+/********************************************************************
+ * POST /api/shopify/customer-webhook
+ * Automatically adds new Shopify customers to rewards program
+ ********************************************************************/
+app.post('/api/shopify/customer-webhook', express.json(), async (req, res) => {
+  try {
+    const customer = req.body;
+    
+    // Extract customer data
+    const email = customer.email;
+    const firstName = customer.first_name || '';
+    const lastName = customer.last_name || '';
+    const shopifyCustomerId = customer.id; // This is the numeric ID
+    
+    if (!email) {
+      return res.status(400).json({ error: 'No email provided' });
+    }
+    
+    console.log(`[Webhook] New customer signup: ${email}`);
+    
+    // Check if user already exists in rewards program
+    const [existing] = await pool.execute(
+      'SELECT * FROM users WHERE email = ?',
+      [email]
+    );
+    
+    if (existing.length > 0) {
+      console.log(`[Webhook] User ${email} already in rewards program`);
+      return res.status(200).json({ message: 'User already exists' });
+    }
+    
+    // Generate referral code for new user
+    const referralCode = generateReferralCode();
+    const initialPoints = 100; // Welcome bonus!
+    
+    // Add to rewards database
+    const [result] = await pool.execute(
+      `INSERT INTO users 
+        (first_name, last_name, email, points, referral_code, shopify_customer_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+      [firstName, lastName, email, initialPoints, referralCode, shopifyCustomerId]
+    );
+    
+    console.log(`[Webhook] Added ${email} to rewards with ${initialPoints} welcome points`);
+    
+    // Also add to Klaviyo if you want
+    if (firstName) {
+      subscribeToKlaviyoList(email, firstName);
+    }
+    
+    res.status(200).json({ 
+      message: 'Customer added to rewards program',
+      userId: result.insertId,
+      referralCode 
+    });
+    
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      // User already exists, that's fine
+      return res.status(200).json({ message: 'User already in program' });
+    }
+    console.error('[Webhook] Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 /********************************************************************
  * Start the server
