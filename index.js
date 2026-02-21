@@ -2,7 +2,7 @@
  * referral-server.js
  ********************************************************************/
 const express = require('express');
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
 const cors = require('cors');
 const crypto = require('crypto');
 const fetch = require('node-fetch');
@@ -23,6 +23,36 @@ const KLAVIYO_LIST_ID = 'Vc2WdM';
 /********************************************************************
  * Helper function to subscribe a user to your Klaviyo list
  ********************************************************************/
+/********************************************************************
+ * Helper function to create a $15 discount code for referred users
+ * Calls the reviews API to create the welcome discount
+ ********************************************************************/
+const REVIEWS_API_URL = 'https://reviews-kettd.kinsta.app';
+
+async function createReferralDiscountCode(email) {
+  try {
+    const response = await fetch(`${REVIEWS_API_URL}/api/referral/create-welcome-discount`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Failed to create referral discount code:', errorData);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log(`Created $15 referral welcome discount code: ${data.discountCode} for ${email}`);
+    return data.discountCode;
+
+  } catch (error) {
+    console.error('Error creating referral discount code:', error);
+    return null;
+  }
+}
+
 async function subscribeToKlaviyoList(email, firstName) {
   // Construct the Klaviyo API endpoint using your list ID
   const klaviyoUrl = `https://a.klaviyo.com/api/v2/list/${KLAVIYO_LIST_ID}/subscribe?api_key=${KLAVIYO_API_KEY}`;
@@ -99,71 +129,27 @@ function verifyShopifyWebhook(req) {
   return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(hmacHeader));
 }
 
-// Set up the database connection pool (credentials from environment variables)
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT, 10),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
+// Set up the database connection pool (PostgreSQL - Neon)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
 /********************************************************************
- * Immediately test the connection and create the necessary tables if they don't exist
+ * Test the database connection
  ********************************************************************/
 (async function testConnection() {
   try {
-    const connection = await pool.getConnection();
-    console.log('✅ Successfully connected to referral_program database!');
-    
-    // Debug: list available tables
-    const [tables] = await connection.query('SHOW TABLES');
-    console.log('Available tables:', tables.map(t => Object.values(t)[0]));
+    const result = await pool.query('SELECT NOW()');
+    console.log('✅ Successfully connected to Neon PostgreSQL database!');
+    console.log('Server time:', result.rows[0].now);
 
-    // Create the "users" table
-    const createUsersTableQuery = `
-      CREATE TABLE IF NOT EXISTS users (
-        user_id INT AUTO_INCREMENT PRIMARY KEY,
-        first_name VARCHAR(255) DEFAULT NULL,
-        email VARCHAR(255) NOT NULL UNIQUE,
-        points INT DEFAULT 0,
-        referral_code VARCHAR(50) UNIQUE,
-        referred_by VARCHAR(50) DEFAULT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-    await connection.execute(createUsersTableQuery);
-    console.log('Users table is set up.');
-
-    // Create the "user_actions" table
-    const createUserActionsTableQuery = `
-      CREATE TABLE IF NOT EXISTS user_actions (
-        action_id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        action_type VARCHAR(50) NOT NULL,
-        points_awarded INT DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(user_id)
-      );
-    `;
-    await connection.execute(createUserActionsTableQuery);
-    console.log('User actions table is set up.');
-
-    // Debug: show the "users" table structure
-    const [userColumns] = await connection.query('DESCRIBE users');
-    console.log('Users table structure:');
-    userColumns.forEach(col => {
-      console.log(`  ${col.Field}: ${col.Type} ${col.Null === 'YES' ? 'NULL' : 'NOT NULL'} ${col.Key}`);
-    });
-
-    // Debug: show the "user_actions" table structure
-    const [actionColumns] = await connection.query('DESCRIBE user_actions');
-    console.log('User actions table structure:');
-    actionColumns.forEach(col => {
-      console.log(`  ${col.Field}: ${col.Type} ${col.Null === 'YES' ? 'NULL' : 'NOT NULL'} ${col.Key}`);
-    });
-    
-    connection.release();
+    // Check tables exist
+    const tables = await pool.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public'
+    `);
+    console.log('Available tables:', tables.rows.map(t => t.table_name));
   } catch (err) {
     console.error('❌ Database connection error:', err);
     process.exit(1);
@@ -199,23 +185,23 @@ app.post('/api/referral/signup', async (req, res) => {
     
     // If a referral code was provided, try to find the original user and award them 5 points
     if (referredBy) {
-      const [referrerRows] = await pool.execute('SELECT * FROM users WHERE referral_code = ?', [referredBy]);
-      if (referrerRows.length > 0) {
+      const referrerResult = await pool.query('SELECT * FROM users WHERE referral_code = $1', [referredBy]);
+      if (referrerResult.rows.length > 0) {
         // Update the original user's points by adding 5
-        await pool.execute('UPDATE users SET points = points + 5 WHERE referral_code = ?', [referredBy]);
+        await pool.query('UPDATE users SET points = points + 5 WHERE referral_code = $1', [referredBy]);
         console.log(`Awarded 5 bonus points to the user with referral code ${referredBy}`);
       } else {
         console.log('Referral code provided does not match any existing user.');
       }
     }
-    
+
     // Insert the new user including the referred_by field (if provided)
     const sql = `
       INSERT INTO users (first_name, email, points, referral_code, referred_by)
-      VALUES (?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5) RETURNING user_id
     `;
-    const [result] = await pool.execute(sql, [firstName, email, initialPoints, referralCode, referredBy || null]);
-    console.log('Signup insert result:', result);
+    const result = await pool.query(sql, [firstName, email, initialPoints, referralCode, referredBy || null]);
+    console.log('Signup insert result:', result.rows[0]);
     
     // After successfully creating the user in your DB, subscribe them to Klaviyo
     // We do this in a separate function for clarity
@@ -225,19 +211,28 @@ app.post('/api/referral/signup', async (req, res) => {
         // We won't fail the entire request if Klaviyo subscription fails,
         // but we do log the error for debugging.
       });
-    
+
+    // If user was referred, create a $15 discount code for their first purchase
+    let welcomeDiscountCode = null;
+    if (referredBy) {
+      welcomeDiscountCode = await createReferralDiscountCode(email);
+    }
+
     // Construct the referral URL for the new user (adjust as needed)
     const referralUrl = `https://www.hemlockandoak.com/pages/email-signup/?ref=${referralCode}`;
-    
+
     return res.status(201).json({
-      message: 'User signed up successfully and awarded 5 points!',
-      userId: result.insertId,
+      message: referredBy
+        ? 'User signed up successfully! Use your $15 discount code on your first purchase!'
+        : 'User signed up successfully and awarded 5 points!',
+      userId: result.rows[0].user_id,
       points: initialPoints,
       referralCode: referralCode,
-      referralUrl: referralUrl
+      referralUrl: referralUrl,
+      welcomeDiscountCode: welcomeDiscountCode
     });
   } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
+    if (err.code === '23505') { // PostgreSQL unique violation
       return res.status(409).json({ error: 'User already exists.' });
     }
     console.error('Database error during signup:', err);
@@ -278,36 +273,34 @@ app.post('/api/referral/award', async (req, res) => {
     }
 
     // Retrieve the user
-    const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
-    if (users.length === 0) {
+    const usersResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (usersResult.rows.length === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
-    const user = users[0];
+    const user = usersResult.rows[0];
 
     // Check if this action has already been claimed (prevent duplicates for ALL actions)
-    const [existingAction] = await pool.execute(
-      'SELECT * FROM user_actions WHERE user_id = ? AND action_type = ?',
+    const existingActionResult = await pool.query(
+      'SELECT * FROM user_actions WHERE user_id = $1 AND action_type = $2',
       [user.user_id, action]
     );
-    if (existingAction.length > 0) {
+    if (existingActionResult.rows.length > 0) {
       return res.status(400).json({ error: 'Points already claimed for this action.' });
     }
 
     // Get points from whitelist
     const pointsToAdd = ALLOWED_ACTIONS[action];
     const newPoints = user.points + pointsToAdd;
-    
+
     // Update the user's points
-    const updateSql = `UPDATE users SET points = ? WHERE email = ?`;
-    await pool.execute(updateSql, [newPoints, email]);
+    await pool.query('UPDATE users SET points = $1 WHERE email = $2', [newPoints, email]);
     console.log('Award update result for', email);
 
     // Record the action in the user_actions table
-    const insertActionSql = `
-      INSERT INTO user_actions (user_id, action_type, points_awarded)
-      VALUES (?, ?, ?)
-    `;
-    await pool.execute(insertActionSql, [user.user_id, action, pointsToAdd]);
+    await pool.query(
+      'INSERT INTO user_actions (user_id, action_type, points_awarded) VALUES ($1, $2, $3)',
+      [user.user_id, action, pointsToAdd]
+    );
     
     return res.json({
       message: `Awarded ${pointsToAdd} points for action "${action}".`,
@@ -333,13 +326,13 @@ app.get('/api/referral/user/:email', async (req, res) => {
     }
     
     console.log('Fetching referral info for email:', email);
-    const [rows] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
-    
-    if (rows.length === 0) {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
-    
-    return res.json({ user: rows[0] });
+
+    return res.json({ user: result.rows[0] });
   } catch (error) {
     console.error('Error fetching referral info:', error);
     return res.status(500).json({ error: 'Server error: ' + error.message });
@@ -383,43 +376,43 @@ app.post('/api/shopify/order-paid', async (req, res) => {
     }
 
     // Look up the user in our referral database
-    const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
+    const usersResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
 
-    if (users.length === 0) {
+    if (usersResult.rows.length === 0) {
       console.log(`User ${email} not in referral program, skipping`);
       return res.status(200).json({ message: 'User not in referral program' });
     }
 
-    const user = users[0];
+    const user = usersResult.rows[0];
 
     // Check if we've already processed this order (prevent duplicates)
-    const [existingOrder] = await pool.execute(
-      'SELECT * FROM user_actions WHERE user_id = ? AND action_ref = ?',
+    const existingOrderResult = await pool.query(
+      'SELECT * FROM user_actions WHERE user_id = $1 AND action_ref = $2',
       [user.user_id, `order_${orderId}`]
     );
 
-    if (existingOrder.length > 0) {
+    if (existingOrderResult.rows.length > 0) {
       console.log(`Order ${orderId} already processed, skipping`);
       return res.status(200).json({ message: 'Order already processed' });
     }
 
     // Check if this is the user's first purchase
-    const [existingPurchases] = await pool.execute(
-      'SELECT * FROM user_actions WHERE user_id = ? AND action_type IN (?, ?, ?)',
-      [user.user_id, 'purchase', 'test_purchase', 'shopify_purchase']
+    const existingPurchasesResult = await pool.query(
+      "SELECT * FROM user_actions WHERE user_id = $1 AND action_type IN ('purchase', 'test_purchase', 'shopify_purchase')",
+      [user.user_id]
     );
-    const isFirstPurchase = existingPurchases.length === 0;
+    const isFirstPurchase = existingPurchasesResult.rows.length === 0;
 
     // Calculate points: 5 points per $1 spent
     const pointsToAdd = Math.floor(orderTotal * 5);
     const newPoints = user.points + pointsToAdd;
 
     // Update the user's points
-    await pool.execute('UPDATE users SET points = ? WHERE email = ?', [newPoints, email]);
+    await pool.query('UPDATE users SET points = $1 WHERE email = $2', [newPoints, email]);
 
     // Record the purchase action with order reference to prevent duplicates
-    await pool.execute(
-      'INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref) VALUES (?, ?, ?, ?)',
+    await pool.query(
+      'INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref) VALUES ($1, $2, $3, $4)',
       [user.user_id, 'shopify_purchase', pointsToAdd, `order_${orderId}`]
     );
 
@@ -430,24 +423,24 @@ app.post('/api/shopify/order-paid', async (req, res) => {
     if (isFirstPurchase && user.referred_by) {
       const referralBonusPoints = 1500; // $15 worth of points
 
-      const [referrers] = await pool.execute(
-        'SELECT * FROM users WHERE referral_code = ?',
+      const referrersResult = await pool.query(
+        'SELECT * FROM users WHERE referral_code = $1',
         [user.referred_by]
       );
 
-      if (referrers.length > 0) {
-        const referrer = referrers[0];
+      if (referrersResult.rows.length > 0) {
+        const referrer = referrersResult.rows[0];
         const referrerNewPoints = referrer.points + referralBonusPoints;
 
         // Update referrer's points
-        await pool.execute('UPDATE users SET points = ? WHERE user_id = ?', [referrerNewPoints, referrer.user_id]);
+        await pool.query('UPDATE users SET points = $1 WHERE user_id = $2', [referrerNewPoints, referrer.user_id]);
 
         // Update referrer's referral_count
-        await pool.execute('UPDATE users SET referral_count = COALESCE(referral_count, 0) + 1 WHERE user_id = ?', [referrer.user_id]);
+        await pool.query('UPDATE users SET referral_count = COALESCE(referral_count, 0) + 1 WHERE user_id = $1', [referrer.user_id]);
 
         // Record the referral bonus
-        await pool.execute(
-          'INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref) VALUES (?, ?, ?, ?)',
+        await pool.query(
+          'INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref) VALUES ($1, $2, $3, $4)',
           [referrer.user_id, 'referral_first_purchase_bonus', referralBonusPoints, `referral_${user.user_id}_order_${orderId}`]
         );
 
@@ -509,29 +502,29 @@ app.post('/api/referral/test-purchase', async (req, res) => {
     }
 
     // Retrieve the user
-    const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
-    if (users.length === 0) {
+    const usersResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (usersResult.rows.length === 0) {
       return res.status(404).json({ error: 'User not found. Please sign up first.' });
     }
-    const user = users[0];
+    const user = usersResult.rows[0];
 
     // Check if this is the user's first purchase
-    const [existingPurchases] = await pool.execute(
-      'SELECT * FROM user_actions WHERE user_id = ? AND action_type IN (?, ?)',
-      [user.user_id, 'test_purchase', 'purchase']
+    const existingPurchasesResult = await pool.query(
+      "SELECT * FROM user_actions WHERE user_id = $1 AND action_type IN ('test_purchase', 'purchase')",
+      [user.user_id]
     );
-    const isFirstPurchase = existingPurchases.length === 0;
+    const isFirstPurchase = existingPurchasesResult.rows.length === 0;
 
     // Calculate points: 5 points per $1 spent
     const pointsToAdd = Math.floor(amount * 5);
     const newPoints = user.points + pointsToAdd;
 
     // Update the user's points
-    await pool.execute('UPDATE users SET points = ? WHERE email = ?', [newPoints, email]);
+    await pool.query('UPDATE users SET points = $1 WHERE email = $2', [newPoints, email]);
 
     // Record the action in the user_actions table
-    await pool.execute(
-      'INSERT INTO user_actions (user_id, action_type, points_awarded) VALUES (?, ?, ?)',
+    await pool.query(
+      'INSERT INTO user_actions (user_id, action_type, points_awarded) VALUES ($1, $2, $3)',
       [user.user_id, 'test_purchase', pointsToAdd]
     );
 
@@ -543,24 +536,24 @@ app.post('/api/referral/test-purchase', async (req, res) => {
       const referralBonusPoints = 1500; // $15 worth of points (100 points = $1)
 
       // Find the referrer by their referral code
-      const [referrers] = await pool.execute(
-        'SELECT * FROM users WHERE referral_code = ?',
+      const referrersResult = await pool.query(
+        'SELECT * FROM users WHERE referral_code = $1',
         [user.referred_by]
       );
 
-      if (referrers.length > 0) {
-        const referrer = referrers[0];
+      if (referrersResult.rows.length > 0) {
+        const referrer = referrersResult.rows[0];
         const referrerNewPoints = referrer.points + referralBonusPoints;
 
         // Update referrer's points
-        await pool.execute('UPDATE users SET points = ? WHERE user_id = ?', [referrerNewPoints, referrer.user_id]);
+        await pool.query('UPDATE users SET points = $1 WHERE user_id = $2', [referrerNewPoints, referrer.user_id]);
 
         // Update referrer's referral_count
-        await pool.execute('UPDATE users SET referral_count = COALESCE(referral_count, 0) + 1 WHERE user_id = ?', [referrer.user_id]);
+        await pool.query('UPDATE users SET referral_count = COALESCE(referral_count, 0) + 1 WHERE user_id = $1', [referrer.user_id]);
 
         // Record the referral bonus action
-        await pool.execute(
-          'INSERT INTO user_actions (user_id, action_type, points_awarded) VALUES (?, ?, ?)',
+        await pool.query(
+          'INSERT INTO user_actions (user_id, action_type, points_awarded) VALUES ($1, $2, $3)',
           [referrer.user_id, 'referral_first_purchase_bonus', referralBonusPoints]
         );
 
@@ -597,12 +590,12 @@ app.get('/api/debug/referral-user/:email', async (req, res) => {
   try {
     const { email } = req.params;
     console.log('Debug endpoint called for email:', email);
-    
-    const [rows] = await pool.execute('SELECT COUNT(*) AS count FROM users WHERE email = ?', [email]);
+
+    const result = await pool.query('SELECT COUNT(*) AS count FROM users WHERE email = $1', [email]);
     return res.json({
       received_email: email,
       timestamp: new Date().toISOString(),
-      user_count: rows[0].count
+      user_count: result.rows[0].count
     });
   } catch (error) {
     console.error('Error in debug endpoint:', error);
