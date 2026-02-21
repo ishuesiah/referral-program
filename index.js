@@ -418,6 +418,32 @@ app.post('/api/shopify/order-paid', async (req, res) => {
 
     console.log(`Awarded ${pointsToAdd} points to ${email}. New total: ${newPoints}`);
 
+    // Check if order used any of our reward discount codes
+    // If so, mark them as used so they can't be cancelled for a refund
+    const discountCodes = order.discount_codes || [];
+    for (const discount of discountCodes) {
+      const code = discount.code;
+      // Check if this is one of our reward codes (POINTS*CAD_* or MILESTONEFREE_*)
+      if (code && (code.startsWith('POINTS') || code.startsWith('MILESTONEFREE_'))) {
+        console.log(`Order used reward discount code: ${code}`);
+
+        // Find user who has this discount code and clear it
+        const discountUserResult = await pool.query(
+          'SELECT * FROM users WHERE last_discount_code = $1',
+          [code]
+        );
+
+        if (discountUserResult.rows.length > 0) {
+          const discountUser = discountUserResult.rows[0];
+          await pool.query(
+            'UPDATE users SET last_discount_code = NULL, discount_code_id = NULL WHERE user_id = $1',
+            [discountUser.user_id]
+          );
+          console.log(`Marked discount code ${code} as used for user ${discountUser.email}`);
+        }
+      }
+    }
+
     // If first purchase and user was referred, award bonus to referrer
     let referrerBonus = null;
     if (isFirstPurchase && user.referred_by) {

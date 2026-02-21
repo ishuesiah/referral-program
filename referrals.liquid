@@ -1053,31 +1053,42 @@ document.querySelectorAll('.cancel-redeem-link').forEach(link = {
     const btn = optionDiv.querySelector('.redeem-discount');
     const codeContainer = optionDiv.querySelector('.discount-code-container');
     const requiredPoints = parseInt(btn.getAttribute('data-points'));
-    
+
     try {
       const response = await fetch(`${apiReviewUrl}apireferralcancel-redeem`, {
         method 'POST',
         headers {'Content-Type' 'applicationjson'},
-        body JSON.stringify({ 
-          email emailFromQuery, 
-          pointsToRefund requiredPoints 
+        body JSON.stringify({
+          email emailFromQuery,
+          pointsToRefund requiredPoints
         })
       });
       const data = await response.json();
-      
+
       if (response.ok) {
         const redeemMessage = document.getElementById('redeem-message');
         redeemMessage.textContent = 'Redemption cancelled. Points refunded.';
         redeemMessage.style.color = 'var(--success)';
         currentUserPoints = data.newPoints  0;
         updateAvailablePointsDisplay(currentUserPoints);
-        
+
          Reset the UI
         btn.dataset.redeemed = 'false';
         btn.textContent = 'Redeem';
         btn.style.display = 'block';
         codeContainer.style.display = 'none';
         enableAllOptions();
+      } else {
+         Handle error - discount may have been used already
+        const redeemMessage = document.getElementById('redeem-message');
+        if (data.error && data.error.includes('already been used')) {
+          redeemMessage.textContent = 'This discount code has already been used and cannot be cancelled.';
+          link.style.display = 'none';  Hide the cancel link
+        } else {
+          redeemMessage.textContent = data.error  'Error cancelling redemption.';
+        }
+        redeemMessage.style.color = 'var(--error)';
+        showNotification(data.error  'Error cancelling redemption.', true);
       }
     } catch(err) {
       showNotification('Error cancelling redemption.', true);

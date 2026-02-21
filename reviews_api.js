@@ -516,16 +516,24 @@ app.post('/api/referral/cancel-redeem', async (req, res) => {
     }
 
     const user = result.rows[0];
+
+    // Check if there's actually a discount code to cancel
+    // If last_discount_code is NULL, the discount was already used or never existed
+    if (!user.last_discount_code) {
+      return res.status(400).json({
+        error: 'No active discount to cancel. The discount may have already been used.'
+      });
+    }
+
     const newPoints = user.points + parseInt(pointsToRefund, 10);
 
-    // Attempt to delete the discount from Shopify if an ID exists
+    // Attempt to deactivate the discount from Shopify if an ID exists
     if (user.discount_code_id) {
       try {
         await deactivateShopifyDiscount(user.discount_code_id);
-
-        console.log(`Deleted discount from Shopify: ${user.discount_code_id}`);
+        console.log(`Deactivated discount in Shopify: ${user.discount_code_id}`);
       } catch (err) {
-        console.error('Failed to delete discount from Shopify:', err.message);
+        console.error('Failed to deactivate discount in Shopify:', err.message);
       }
     }
 
