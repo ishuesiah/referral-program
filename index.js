@@ -427,6 +427,14 @@ app.post('/api/shopify/order-paid', async (req, res) => {
       if (code && (code.startsWith('POINTS') || code.startsWith('MILESTONEFREE_'))) {
         console.log(`Order used reward discount code: ${code}`);
 
+        // Extract the tier (points value) from the discount code
+        let usedTier = null;
+        const tierMatch = code.match(/POINTS(\d+(?:\.\d+)?)CAD_/);
+        if (tierMatch) {
+          const dollarValue = parseFloat(tierMatch[1]);
+          usedTier = dollarValue * 100; // Convert to points (e.g., $5 = 500 points)
+        }
+
         // Find user who has this discount code and clear it
         const discountUserResult = await pool.query(
           'SELECT * FROM users WHERE last_discount_code = $1',
@@ -440,6 +448,15 @@ app.post('/api/shopify/order-paid', async (req, res) => {
             [discountUser.user_id]
           );
           console.log(`Marked discount code ${code} as used for user ${discountUser.email}`);
+
+          // Record the used tier to lock it until next purchase
+          if (usedTier) {
+            await pool.query(
+              'INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref) VALUES ($1, $2, $3, $4)',
+              [discountUser.user_id, 'discount_tier_used', 0, `tier_${usedTier}`]
+            );
+            console.log(`Locked tier ${usedTier} for user ${discountUser.email}`);
+          }
         }
       }
     }
