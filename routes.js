@@ -361,6 +361,9 @@ app.post('/api/referral/test-purchase', async (req, res) => {
     const pointsToAdd = rewards.calculatePointsForPurchase(amount, totalSpent);
     const newPoints = user.points + pointsToAdd;
 
+    // Update user's tier and total_spent in database
+    await repo.updateUserTier(user.user_id, tier.name, totalSpent);
+
     // Update points
     await repo.updateUserPoints(email, newPoints);
 

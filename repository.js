@@ -132,6 +132,13 @@ async function updateMilestoneDiscountCodes(userId, redeemedMilestonesJson) {
   );
 }
 
+async function updateUserTier(userId, tier, totalSpent) {
+  await pool.query(
+    'UPDATE users SET tier = $1, total_spent = $2 WHERE user_id = $3',
+    [tier, totalSpent, userId]
+  );
+}
+
 /********************************************************************
  * User Actions Queries
  ********************************************************************/
@@ -191,6 +198,7 @@ module.exports = {
   clearUserDiscountCodeById,
   incrementReferralCount,
   updateMilestoneDiscountCodes,
+  updateUserTier,
 
   // Actions
   findActionByUserAndType,

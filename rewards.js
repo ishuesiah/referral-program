@@ -559,6 +559,9 @@ async function processPurchase({ email, orderTotal, orderId, discountCodes = [] 
 
   console.log(`Purchase: ${email} | Tier: ${tier.name} | Spent: $${totalSpent} | Order: $${orderTotal} | Points: ${pointsToAdd}`);
 
+  // Update user's tier and total_spent in database
+  await repo.updateUserTier(user.user_id, tier.name, totalSpent);
+
   await repo.updateUserPoints(email, newPoints);
   await repo.createAction({
     userId: user.user_id,
