@@ -3,10 +3,13 @@
  * Business logic layer - all referral program functions
  ********************************************************************/
 const crypto = require('crypto');
-const fetch = require('node-fetch');
-const axios = require('axios');
 const repo = require('./repository');
 const config = require('./config');
+
+// Import gateways
+const shopify = require('./shopify-gateway');
+const klaviyo = require('./klaviyo-gateway');
+const judgeme = require('./judgeme-gateway');
 
 /********************************************************************
  * Utility Functions
@@ -45,303 +48,6 @@ function parseDiscountTierFromCode(code) {
 }
 
 /********************************************************************
- * Shopify Webhook Verification
- ********************************************************************/
-function verifyShopifyWebhook(req) {
-  if (!config.SHOPIFY_WEBHOOK_SECRET) {
-    console.warn('WARNING: SHOPIFY_WEBHOOK_SECRET not set - webhook verification disabled');
-    return true;
-  }
-
-  const hmacHeader = req.get('X-Shopify-Hmac-SHA256');
-  if (!hmacHeader) {
-    return false;
-  }
-
-  const hash = crypto
-    .createHmac('sha256', config.SHOPIFY_WEBHOOK_SECRET)
-    .update(req.rawBody)
-    .digest('base64');
-
-  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(hmacHeader));
-}
-
-/********************************************************************
- * Klaviyo Integration
- ********************************************************************/
-async function subscribeToKlaviyo(email, firstName) {
-  const klaviyoUrl = `https://a.klaviyo.com/api/v2/list/${config.KLAVIYO_LIST_ID}/subscribe?api_key=${config.KLAVIYO_API_KEY}`;
-
-  const payload = {
-    profiles: [{ email, first_name: firstName }]
-  };
-
-  const response = await fetch(klaviyoUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Klaviyo subscription error:', errorText);
-    return false;
-  }
-
-  console.log(`Successfully subscribed ${email} to Klaviyo list.`);
-  return true;
-}
-
-/********************************************************************
- * Shopify Discount Code Functions
- ********************************************************************/
-async function createShopifyDiscountCode(amountOff, pointsToRedeem, options = {}) {
-  const rewardType = options.rewardType || 'fixed_amount';
-  let generatedCode = '';
-  let variables = {};
-  let title = '';
-
-  if (rewardType === 'free_product') {
-    if (!options.collectionId) {
-      throw new Error('Missing collectionId for free collection reward');
-    }
-
-    generatedCode = `MILESTONEFREE_${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-    title = `Free Collection Reward (${generatedCode})`;
-
-    variables = {
-      basicCodeDiscount: {
-        title,
-        code: generatedCode,
-        startsAt: new Date().toISOString(),
-        customerSelection: { all: true },
-        customerGets: {
-          value: { percentage: 1.0 },
-          items: {
-            collections: { add: [options.collectionId] }
-          }
-        },
-        combinesWith: {
-          orderDiscounts: false,
-          productDiscounts: false,
-          shippingDiscounts: true
-        },
-        usageLimit: 1,
-        appliesOncePerCustomer: true
-      }
-    };
-  } else {
-    const numericValue = amountOff === 'dynamic'
-      ? (pointsToRedeem / 100).toFixed(2)
-      : parseFloat(String(amountOff).replace(/\D/g, '')) || 5;
-
-    generatedCode = `POINTS${numericValue}CAD_${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-    title = `$${numericValue} Off Points Reward`;
-
-    variables = {
-      basicCodeDiscount: {
-        title,
-        code: generatedCode,
-        startsAt: new Date().toISOString(),
-        customerSelection: { all: true },
-        customerGets: {
-          value: {
-            discountAmount: {
-              amount: numericValue,
-              appliesOnEachItem: false
-            }
-          },
-          items: { all: true }
-        },
-        combinesWith: {
-          orderDiscounts: true,
-          productDiscounts: true,
-          shippingDiscounts: true
-        },
-        usageLimit: 1,
-        appliesOncePerCustomer: true
-      }
-    };
-  }
-
-  const mutation = `
-    mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
-      discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
-        codeDiscountNode {
-          id
-          codeDiscount {
-            ... on DiscountCodeBasic {
-              codes(first: 1) { nodes { code } }
-            }
-          }
-        }
-        userErrors { field message }
-      }
-    }
-  `;
-
-  const response = await fetch(config.SHOPIFY_GRAPHQL_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Shopify-Access-Token': config.SHOPIFY_ADMIN_TOKEN
-    },
-    body: JSON.stringify({ query: mutation, variables })
-  });
-
-  const result = await response.json();
-
-  if (result.errors || result.data?.discountCodeBasicCreate?.userErrors?.length > 0) {
-    console.error('Discount creation error:', JSON.stringify(result, null, 2));
-    throw new Error('Failed to create discount code');
-  }
-
-  const discountData = result.data.discountCodeBasicCreate.codeDiscountNode;
-  return {
-    code: discountData.codeDiscount.codes.nodes[0].code,
-    discountId: discountData.id.replace('DiscountCodeNode', 'DiscountCodeBasic')
-  };
-}
-
-async function deactivateShopifyDiscount(discountId) {
-  // Step 1: Get the discount's startsAt
-  const query = `
-    query getDiscount($id: ID!) {
-      codeDiscountNode(id: $id) {
-        codeDiscount {
-          ... on DiscountCodeBasic { startsAt }
-        }
-      }
-    }
-  `;
-
-  const queryResponse = await fetch(config.SHOPIFY_GRAPHQL_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Shopify-Access-Token': config.SHOPIFY_ADMIN_TOKEN
-    },
-    body: JSON.stringify({ query, variables: { id: discountId } })
-  });
-
-  const queryResult = await queryResponse.json();
-  const startsAt = queryResult.data?.codeDiscountNode?.codeDiscount?.startsAt;
-
-  if (!startsAt) {
-    throw new Error('Could not retrieve startsAt for discount');
-  }
-
-  // Step 2: Set endsAt to expire the discount
-  const endsAt = new Date(new Date(startsAt).getTime() + 60 * 1000).toISOString();
-
-  const mutation = `
-    mutation discountCodeBasicUpdate($id: ID!, $basicCodeDiscount: DiscountCodeBasicInput!) {
-      discountCodeBasicUpdate(id: $id, basicCodeDiscount: $basicCodeDiscount) {
-        codeDiscountNode { id }
-        userErrors { field message }
-      }
-    }
-  `;
-
-  const response = await fetch(config.SHOPIFY_GRAPHQL_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Shopify-Access-Token': config.SHOPIFY_ADMIN_TOKEN
-    },
-    body: JSON.stringify({
-      query: mutation,
-      variables: { id: discountId, basicCodeDiscount: { endsAt } }
-    })
-  });
-
-  const result = await response.json();
-  const userErrors = result.data?.discountCodeBasicUpdate?.userErrors || [];
-
-  if (userErrors.length > 0) {
-    throw new Error(userErrors[0].message || 'Failed to deactivate discount');
-  }
-
-  console.log('Successfully deactivated discount code');
-  return true;
-}
-
-/********************************************************************
- * Shopify Customer Functions
- ********************************************************************/
-async function getShopifyCustomerTotalSpent(email) {
-  const query = `
-    query getCustomerByEmail($email: String!) {
-      customers(first: 1, query: $email) {
-        edges {
-          node {
-            id
-            email
-            amountSpent {
-              amount
-              currencyCode
-            }
-          }
-        }
-      }
-    }
-  `;
-
-  try {
-    const response = await fetch(config.SHOPIFY_GRAPHQL_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': config.SHOPIFY_ADMIN_TOKEN
-      },
-      body: JSON.stringify({ query, variables: { email: `email:${email}` } })
-    });
-
-    const result = await response.json();
-    const customer = result.data?.customers?.edges?.[0]?.node;
-
-    if (customer) {
-      return parseFloat(customer.amountSpent?.amount || 0);
-    }
-    return 0;
-  } catch (err) {
-    console.error('Error fetching customer total spent:', err);
-    return 0;
-  }
-}
-
-/********************************************************************
- * Judge.me Review Functions
- ********************************************************************/
-async function submitReview(reviewData) {
-  const payload = {
-    ...reviewData,
-    api_token: config.JUDGEME_API_TOKEN,
-    shop_domain: config.SHOP_DOMAIN,
-    platform: 'shopify'
-  };
-
-  const response = await axios.post('https://judge.me/api/v1/reviews', payload, {
-    headers: { 'Content-Type': 'application/json' }
-  });
-
-  return response.data;
-}
-
-async function fetchCustomerReviews(email) {
-  const response = await axios.get('https://judge.me/api/v1/reviews', {
-    params: {
-      api_token: config.JUDGEME_API_TOKEN,
-      shop_domain: config.SHOP_DOMAIN,
-      platform: 'shopify',
-      reviewer_email: email
-    }
-  });
-
-  return response.data;
-}
-
-/********************************************************************
  * Core Business Logic Functions
  ********************************************************************/
 async function processSignup({ email, firstName, referredBy }) {
@@ -366,7 +72,7 @@ async function processSignup({ email, firstName, referredBy }) {
   });
 
   // Subscribe to Klaviyo (non-blocking)
-  subscribeToKlaviyo(email, firstName).catch(err => {
+  klaviyo.subscribeToList(email, firstName).catch(err => {
     console.error('Klaviyo subscription error:', err);
   });
 
@@ -374,7 +80,7 @@ async function processSignup({ email, firstName, referredBy }) {
   let welcomeDiscountCode = null;
   if (referredBy) {
     try {
-      const discount = await createShopifyDiscountCode('15', 0);
+      const discount = await shopify.createDiscountCode('15', 0);
       welcomeDiscountCode = discount.code;
     } catch (err) {
       console.error('Failed to create welcome discount:', err);
@@ -442,7 +148,7 @@ async function processRedeem({ email, pointsToRedeem, redeemType, redeemValue })
   });
 
   // Create discount code
-  const { code, discountId } = await createShopifyDiscountCode(redeemValue, pointsToRedeem);
+  const { code, discountId } = await shopify.createDiscountCode(redeemValue, pointsToRedeem);
 
   // Save discount code to user
   await repo.updateUserDiscountCode(user.user_id, code, discountId, newPoints);
@@ -463,7 +169,7 @@ async function processCancelRedeem({ email, pointsToRefund }) {
   // Deactivate discount in Shopify
   if (user.discount_code_id) {
     try {
-      await deactivateShopifyDiscount(user.discount_code_id);
+      await shopify.deactivateDiscount(user.discount_code_id);
     } catch (err) {
       console.error('Failed to deactivate Shopify discount:', err.message);
     }
@@ -489,7 +195,7 @@ async function processMarkDiscountUsed({ email, usedCode }) {
   // Deactivate in Shopify
   if (user.discount_code_id) {
     try {
-      await deactivateShopifyDiscount(user.discount_code_id);
+      await shopify.deactivateDiscount(user.discount_code_id);
     } catch (err) {
       console.error('Failed to deactivate Shopify discount:', err.message);
     }
@@ -550,7 +256,7 @@ async function processPurchase({ email, orderTotal, orderId, discountCodes = [] 
   const isFirstPurchase = existingPurchases.length === 0;
 
   // Get customer's total spent from Shopify for tier calculation
-  const totalSpent = await getShopifyCustomerTotalSpent(email);
+  const totalSpent = await shopify.getCustomerTotalSpent(email);
   const tier = getTierForSpent(totalSpent);
 
   // Calculate and award points based on tier
@@ -645,7 +351,7 @@ async function processMilestoneRedeem({ email, milestonePoints }) {
   }
 
   // Create discount code
-  const { code: discountCode } = await createShopifyDiscountCode('100', 0, {
+  const { code: discountCode } = await shopify.createDiscountCode('100', 0, {
     rewardType: 'free_product',
     collectionId: reward.collectionId
   });
@@ -661,7 +367,7 @@ async function processMilestoneRedeem({ email, milestonePoints }) {
 }
 
 async function createWelcomeDiscount(email) {
-  const { code, discountId } = await createShopifyDiscountCode('15', 0);
+  const { code, discountId } = await shopify.createDiscountCode('15', 0);
 
   // Log action if user exists
   const user = await repo.findUserByEmail(email);
@@ -684,16 +390,16 @@ module.exports = {
   generateReferralCode,
   calculatePointsForPurchase,
   getTierForSpent,
-  getShopifyCustomerTotalSpent,
   buildReferralUrl,
-  verifyShopifyWebhook,
 
-  // External Services
-  subscribeToKlaviyo,
-  createShopifyDiscountCode,
-  deactivateShopifyDiscount,
-  submitReview,
-  fetchCustomerReviews,
+  // Gateway re-exports (for backwards compatibility)
+  verifyShopifyWebhook: shopify.verifyWebhook,
+  getShopifyCustomerTotalSpent: shopify.getCustomerTotalSpent,
+  createShopifyDiscountCode: shopify.createDiscountCode,
+  deactivateShopifyDiscount: shopify.deactivateDiscount,
+  subscribeToKlaviyo: klaviyo.subscribeToList,
+  submitReview: judgeme.submitReview,
+  fetchCustomerReviews: judgeme.fetchCustomerReviews,
 
   // Core Business Logic
   processSignup,
