@@ -7,9 +7,9 @@ const repo = require('./repository');
 const config = require('./config');
 
 // Import gateways
-const shopify = require('./shopify-gateway');
-const klaviyo = require('./klaviyo-gateway');
-const judgeme = require('./judgeme-gateway');
+const shopify = require('./gateways/shopify');
+const klaviyo = require('./gateways/klaviyo');
+const judgeme = require('./gateways/judgeme');
 
 /********************************************************************
  * Utility Functions

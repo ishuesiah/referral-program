@@ -3,7 +3,7 @@
  * Judge.me API integration - product reviews
  ********************************************************************/
 const axios = require('axios');
-const config = require('./config');
+const config = require('../config');
 
 /********************************************************************
  * Submit a Review

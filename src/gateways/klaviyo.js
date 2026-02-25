@@ -3,7 +3,7 @@
  * Klaviyo API integration - email list subscriptions
  ********************************************************************/
 const fetch = require('node-fetch');
-const config = require('./config');
+const config = require('../config');
 
 /********************************************************************
  * Subscribe to Email List

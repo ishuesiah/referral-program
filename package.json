@@ -1,9 +1,9 @@
 {
   "name": "referral-program",
   "version": "1.0.0",
-  "main": "routes.js",
+  "main": "src/routes.js",
   "scripts": {
-    "start": "node routes.js",
+    "start": "node src/routes.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

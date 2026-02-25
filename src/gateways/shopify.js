@@ -4,7 +4,7 @@
  ********************************************************************/
 const crypto = require('crypto');
 const fetch = require('node-fetch');
-const config = require('./config');
+const config = require('../config');
 
 /********************************************************************
  * Webhook Verification
