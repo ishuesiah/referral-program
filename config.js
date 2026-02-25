@@ -42,10 +42,19 @@ module.exports = {
   /********************************************************************
    * Points Configuration
    ********************************************************************/
-  SIGNUP_POINTS: 5,
+  SIGNUP_POINTS: 50,
   REFERRER_SIGNUP_BONUS: 5,
   REFERRAL_BONUS_POINTS: 1500,  // $15 worth (awarded when referred user makes first purchase)
-  POINTS_PER_DOLLAR: 5,
+
+  /********************************************************************
+   * Tier Configuration (based on total $ spent)
+   ********************************************************************/
+  TIERS: [
+    { name: 'Bronze', minSpent: 0, pointsPerDollar: 5 },
+    { name: 'Silver', minSpent: 350, pointsPerDollar: 5 },
+    { name: 'Gold', minSpent: 750, pointsPerDollar: 7 },
+    { name: 'VIP', minSpent: 2000, pointsPerDollar: 10 }
+  ],
 
   /********************************************************************
    * Allowed Actions for Point Awards

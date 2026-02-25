@@ -15,8 +15,20 @@ function generateReferralCode() {
   return crypto.randomBytes(3).toString('hex').toUpperCase();
 }
 
-function calculatePointsForPurchase(orderTotal) {
-  return Math.floor(orderTotal * config.POINTS_PER_DOLLAR);
+function getTierForSpent(totalSpent) {
+  const tiers = config.TIERS;
+  // Find the highest tier the customer qualifies for
+  for (let i = tiers.length - 1; i >= 0; i--) {
+    if (totalSpent >= tiers[i].minSpent) {
+      return tiers[i];
+    }
+  }
+  return tiers[0]; // Default to Bronze
+}
+
+function calculatePointsForPurchase(orderTotal, totalSpent = 0) {
+  const tier = getTierForSpent(totalSpent);
+  return Math.floor(orderTotal * tier.pointsPerDollar);
 }
 
 function buildReferralUrl(referralCode) {
@@ -252,6 +264,50 @@ async function deactivateShopifyDiscount(discountId) {
 
   console.log('Successfully deactivated discount code');
   return true;
+}
+
+/********************************************************************
+ * Shopify Customer Functions
+ ********************************************************************/
+async function getShopifyCustomerTotalSpent(email) {
+  const query = `
+    query getCustomerByEmail($email: String!) {
+      customers(first: 1, query: $email) {
+        edges {
+          node {
+            id
+            email
+            amountSpent {
+              amount
+              currencyCode
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    const response = await fetch(config.SHOPIFY_GRAPHQL_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': config.SHOPIFY_ADMIN_TOKEN
+      },
+      body: JSON.stringify({ query, variables: { email: `email:${email}` } })
+    });
+
+    const result = await response.json();
+    const customer = result.data?.customers?.edges?.[0]?.node;
+
+    if (customer) {
+      return parseFloat(customer.amountSpent?.amount || 0);
+    }
+    return 0;
+  } catch (err) {
+    console.error('Error fetching customer total spent:', err);
+    return 0;
+  }
 }
 
 /********************************************************************
@@ -493,9 +549,15 @@ async function processPurchase({ email, orderTotal, orderId, discountCodes = [] 
   const existingPurchases = await repo.findPurchaseActions(user.user_id);
   const isFirstPurchase = existingPurchases.length === 0;
 
-  // Calculate and award points
-  const pointsToAdd = calculatePointsForPurchase(orderTotal);
+  // Get customer's total spent from Shopify for tier calculation
+  const totalSpent = await getShopifyCustomerTotalSpent(email);
+  const tier = getTierForSpent(totalSpent);
+
+  // Calculate and award points based on tier
+  const pointsToAdd = calculatePointsForPurchase(orderTotal, totalSpent);
   const newPoints = user.points + pointsToAdd;
+
+  console.log(`Purchase: ${email} | Tier: ${tier.name} | Spent: $${totalSpent} | Order: $${orderTotal} | Points: ${pointsToAdd}`);
 
   await repo.updateUserPoints(email, newPoints);
   await repo.createAction({
@@ -523,7 +585,10 @@ async function processPurchase({ email, orderTotal, orderId, discountCodes = [] 
     pointsAwarded: pointsToAdd,
     newPoints,
     isFirstPurchase,
-    referrerBonus
+    referrerBonus,
+    tier: tier.name,
+    totalSpent,
+    pointsPerDollar: tier.pointsPerDollar
   };
 }
 
@@ -615,6 +680,8 @@ module.exports = {
   // Utilities
   generateReferralCode,
   calculatePointsForPurchase,
+  getTierForSpent,
+  getShopifyCustomerTotalSpent,
   buildReferralUrl,
   verifyShopifyWebhook,
 

@@ -308,7 +308,10 @@ app.post('/api/shopify/order-paid', async (req, res) => {
       pointsAwarded: result.pointsAwarded,
       newPoints: result.newPoints,
       isFirstPurchase: result.isFirstPurchase,
-      referrerBonus: result.referrerBonus
+      referrerBonus: result.referrerBonus,
+      tier: result.tier,
+      totalSpent: result.totalSpent,
+      pointsPerDollar: result.pointsPerDollar
     });
   } catch (err) {
     console.error('Webhook processing error:', err);
@@ -350,8 +353,12 @@ app.post('/api/referral/test-purchase', async (req, res) => {
     const existingPurchases = await repo.findPurchaseActions(user.user_id);
     const isFirstPurchase = existingPurchases.length === 0;
 
-    // Calculate points
-    const pointsToAdd = rewards.calculatePointsForPurchase(amount);
+    // Get customer's total spent from Shopify for tier calculation
+    const totalSpent = await rewards.getShopifyCustomerTotalSpent(email);
+    const tier = rewards.getTierForSpent(totalSpent);
+
+    // Calculate points based on tier
+    const pointsToAdd = rewards.calculatePointsForPurchase(amount, totalSpent);
     const newPoints = user.points + pointsToAdd;
 
     // Update points
@@ -377,7 +384,10 @@ app.post('/api/referral/test-purchase', async (req, res) => {
       pointsAwarded: pointsToAdd,
       newPoints,
       isFirstPurchase,
-      referrerBonus
+      referrerBonus,
+      tier: tier.name,
+      totalSpent,
+      pointsPerDollar: tier.pointsPerDollar
     });
   } catch (err) {
     console.error('Test purchase error:', err);
