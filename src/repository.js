@@ -140,6 +140,49 @@ async function updateUserTier(userId, tier, totalSpent) {
 }
 
 /********************************************************************
+ * Active Rewards (Multiple Discount Codes Support)
+ ********************************************************************/
+async function getActiveRewards(userId) {
+  const result = await pool.query(
+    'SELECT active_rewards FROM users WHERE user_id = $1',
+    [userId]
+  );
+  const row = result.rows[0];
+  if (!row || !row.active_rewards) return [];
+  try {
+    return JSON.parse(row.active_rewards);
+  } catch (e) {
+    return [];
+  }
+}
+
+async function addActiveReward(userId, reward) {
+  // reward: { code, discountId, points, redeemedAt }
+  const current = await getActiveRewards(userId);
+  current.push(reward);
+  await pool.query(
+    'UPDATE users SET active_rewards = $1 WHERE user_id = $2',
+    [JSON.stringify(current), userId]
+  );
+}
+
+async function removeActiveReward(userId, discountCode) {
+  const current = await getActiveRewards(userId);
+  const reward = current.find(r => r.code === discountCode);
+  const updated = current.filter(r => r.code !== discountCode);
+  await pool.query(
+    'UPDATE users SET active_rewards = $1 WHERE user_id = $2',
+    [JSON.stringify(updated), userId]
+  );
+  return reward; // Return the removed reward for getting discountId
+}
+
+async function findActiveRewardByCode(userId, discountCode) {
+  const current = await getActiveRewards(userId);
+  return current.find(r => r.code === discountCode) || null;
+}
+
+/********************************************************************
  * User Actions Queries
  ********************************************************************/
 async function findActionByUserAndType(userId, actionType) {
@@ -204,5 +247,11 @@ module.exports = {
   findActionByUserAndType,
   findActionByUserAndRef,
   findPurchaseActions,
-  createAction
+  createAction,
+
+  // Active Rewards (Multiple Discount Codes)
+  getActiveRewards,
+  addActiveReward,
+  removeActiveReward,
+  findActiveRewardByCode
 };

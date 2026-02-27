@@ -126,7 +126,15 @@ app.get('/api/referral/user/:email', async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    return res.json({ user });
+    // Get active rewards (multiple discount codes)
+    const activeRewards = await repo.getActiveRewards(user.user_id);
+
+    return res.json({
+      user: {
+        ...user,
+        active_rewards: activeRewards
+      }
+    });
   } catch (err) {
     console.error('Fetch user error:', err);
     return res.status(500).json({ error: 'Server error: ' + err.message });
@@ -169,13 +177,13 @@ app.post('/api/referral/redeem', async (req, res) => {
 // POST /api/referral/cancel-redeem
 app.post('/api/referral/cancel-redeem', async (req, res) => {
   try {
-    const { email, pointsToRefund } = req.body;
+    const { email, pointsToRefund, discountCode } = req.body;
 
     if (!email || !pointsToRefund) {
       return res.status(400).json({ error: 'Missing email or points to refund.' });
     }
 
-    const result = await rewards.processCancelRedeem({ email, pointsToRefund });
+    const result = await rewards.processCancelRedeem({ email, pointsToRefund, discountCode });
 
     return res.json({ message: 'Points refunded.', newPoints: result.newPoints });
   } catch (err) {

@@ -150,18 +150,61 @@ async function processRedeem({ email, pointsToRedeem, redeemType, redeemValue })
   // Create discount code
   const { code, discountId } = await shopify.createDiscountCode(redeemValue, pointsToRedeem);
 
-  // Save discount code to user
+  // Save discount code to user (legacy single-code field)
   await repo.updateUserDiscountCode(user.user_id, code, discountId, newPoints);
+
+  // Also add to active_rewards array for multiple codes support
+  await repo.addActiveReward(user.user_id, {
+    code,
+    discountId,
+    points: pointsToRedeem,
+    redeemedAt: new Date().toISOString(),
+    canCancel: true,
+    used: false
+  });
 
   return { discountCode: code, newPoints };
 }
 
-async function processCancelRedeem({ email, pointsToRefund }) {
+async function processCancelRedeem({ email, pointsToRefund, discountCode }) {
   const user = await repo.findUserByEmail(email);
   if (!user) {
     throw new Error('User not found');
   }
 
+  // If a specific discount code is provided, use the new multi-code system
+  if (discountCode) {
+    const reward = await repo.findActiveRewardByCode(user.user_id, discountCode);
+    if (!reward) {
+      throw new Error('No active discount to cancel');
+    }
+
+    // Deactivate discount in Shopify
+    if (reward.discountId) {
+      try {
+        await shopify.deactivateDiscount(reward.discountId);
+      } catch (err) {
+        console.error('Failed to deactivate Shopify discount:', err.message);
+      }
+    }
+
+    // Remove from active rewards
+    await repo.removeActiveReward(user.user_id, discountCode);
+
+    // Refund points
+    const refundAmount = pointsToRefund || reward.points;
+    const newPoints = user.points + parseInt(refundAmount, 10);
+    await repo.updateUserPoints(email, newPoints);
+
+    // If this was also the last_discount_code, clear it
+    if (user.last_discount_code === discountCode) {
+      await repo.clearUserDiscountCode(email);
+    }
+
+    return { newPoints };
+  }
+
+  // Legacy: single code cancellation (backwards compatibility)
   if (!user.last_discount_code) {
     throw new Error('No active discount to cancel');
   }
