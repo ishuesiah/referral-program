@@ -456,6 +456,46 @@ app.get('/api/customer-reviews', async (req, res) => {
 });
 
 /********************************************************************
+ * Test Klaviyo Tier Upgrade Event
+ ********************************************************************/
+app.post('/api/test/klaviyo-tier-upgrade', async (req, res) => {
+  try {
+    const { email, secret } = req.body;
+
+    // Require secret for security
+    if (secret !== config.TEST_ENDPOINT_SECRET) {
+      return res.status(401).json({ error: 'Invalid secret' });
+    }
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Send test tier upgrade event to Klaviyo
+    const result = await rewards.trackKlaviyoTierUpgrade(
+      email,
+      'Test User',      // firstName
+      'Bronze',         // previousTier
+      'Silver',         // newTier
+      350,              // totalSpent
+      1750              // currentPoints
+    );
+
+    return res.json({
+      success: result,
+      message: result
+        ? 'Tier Upgrade event sent to Klaviyo! Check Klaviyo in a few minutes for the new metric.'
+        : 'Failed to send event. Check server logs and verify KLAVIYO_PUBLIC_KEY is set.',
+      event: 'Tier Upgrade',
+      email
+    });
+  } catch (err) {
+    console.error('Test Klaviyo event error:', err);
+    return res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
+/********************************************************************
  * Server Initialization
  ********************************************************************/
 async function startServer() {

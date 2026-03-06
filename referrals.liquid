@@ -1,0 +1,2207 @@
+{% comment %}
+  Hemlock & Oak — Rewards & Referrals (Starbucks-style, two sections)
+  - Section 1: Points & Rewards (points balance + points progress + redeem + earn table)
+  - Section 2: Refer a Friend (referral link + share + referral progress with milestones)
+  IDs used by JS are preserved. New IDs:
+    - #points-progress-bar  (fill)
+    - #points-progress-marker (little star marker)
+{% endcomment %}
+
+<style>
+/* ===================== Hemlock & Oak — Rewards & Referrals ===================== */
+:root{
+  --primary:#1f6d7d;
+  --secondary:#ac8e69;
+  --gradient1:#ac8e69; 
+  --gradient2:#d1b088; 
+  --dark:#354744;
+  --light:#f4f4f2;
+  --border:transparent;
+  --success:#4CAF50;
+  --error:#DC3545;
+  --rail:#ecebe8;
+  --card:rgba(250, 250, 248, 0.999);
+  --shadow:0 2px 8px rgba(0,0,0,.03);
+  --radius:5px;
+  --gap:20px;
+  --section-gap:30px;
+}
+
+.account-referrals{
+  width:100%;
+  color:var(--dark);
+}
+
+.ref-h6 { 
+  font-weight: 700; 
+  font-size: x-large;
+  margin-block-end: -15px !important;
+}
+
+/* ---------- Header ---------- */
+.account-header{ margin-bottom:24px; }
+.header-content{
+  display:flex; align-items:center; padding-bottom:12px; border-bottom:2px solid var(--secondary);
+}
+.account-header-font{ font-size:32px !important; font-weight:600; margin:0; letter-spacing: 0.15px }
+
+/* Brand lockup requested */
+.rewards-title{ display:inline-flex; align-items:center; gap:12px; }
+.rewards-title img{ width:115px; height:auto; display:block; }
+
+/* ---------- Notifications ---------- */
+.notification-banner{
+  display:none; align-items:center; margin:16px 0; padding:12px 15px;
+  background:#e6f7ed; border:1px solid var(--success);box-shadow:var(--shadow);
+}
+.notification-banner.error{ background:#ffe5e5; border-color:#ffbdbd; }
+.notification-content{ display:flex; justify-content:space-between; width:100%; }
+#notification-message{ display: none;color:var(--success); font-weight:600; }
+.notification-banner.error #notification-message{ color:#e74c3c; }
+.notification-close{ background:none; border:none; font-size:18px; cursor:pointer; opacity:.7; }
+.notification-close:hover{ opacity:1; }
+
+/* ---------- Section shells ---------- */
+.rewards-shell,.referrals-shell{
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:24px;
+}
+
+/* ---------- Points Showcase Section ---------- */
+.points-showcase{
+  background: linear-gradient(135deg, #faf9f7 0%, #f0efe9 100%);
+  border-radius: var(--radius);
+  padding: 32px 24px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.points-showcase::before{
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(172, 142, 105, 0.05) 0%, transparent 60%);
+  pointer-events: none;
+}
+.points-inner{
+  position: relative;
+  z-index: 1;
+}
+.points-icon{
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  background: linear-gradient(135deg, var(--gradient1), var(--gradient2));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(172, 142, 105, 0.3);
+}
+.points-icon svg{
+  width: 24px;
+  height: 24px;
+  fill: #fff;
+}
+.points-sub{
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #888;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.points-showcase .big{
+  font-size: 56px;
+  font-weight: 200;
+  color: var(--primary);
+  line-height: 1;
+  letter-spacing: -2px;
+  margin-bottom: 8px;
+}
+.points-label{
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+/* ---------- Tier Journey Section ---------- */
+.tier-journey{
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  margin-top: 16px;
+}
+.tier-journey-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.tier-journey-title{
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--dark);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tier-journey-title svg{
+  width: 20px;
+  height: 20px;
+  stroke: var(--secondary);
+}
+.tier-current-badge{
+  background: linear-gradient(135deg, var(--gradient1), var(--gradient2));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 20px;
+}
+
+/* ---------- Legacy points-balance (kept for compatibility) ---------- */
+.points-balance{
+  display:flex;
+  align-items:flex-start;
+  gap:40px;
+  flex-wrap:wrap;
+}
+.points-balance .big{
+  font-size:48px;
+  font-weight:300;
+  color:var(--primary);
+  line-height:1;
+  letter-spacing:-1px;
+}
+
+/* ---------- Starbucks-like POINTS rail ---------- */
+.points-rail{
+  flex:1;
+  min-width:260px;
+  margin-top:24px;
+  margin-bottom:20px;
+  padding: 0 8px; /* Prevent dots from being cut off at edges */
+}
+
+/* Rail */
+.rail{
+  position:relative;
+  width:100%;
+  height:6px;
+  background:var(--rail);
+  border-radius:999px;
+  overflow:visible;
+}
+.rail-fill{
+  height:100%;
+  width:0%;
+  background:linear-gradient(90deg, var(--gradient1), var(--gradient2));
+  border-radius:999px;
+  transition:width .45s ease;
+}
+/* Marker pin */
+.rail-marker{ position:absolute; top:-32px; transform:translateX(-60%); }
+.rail-marker .pin{ width:22px; height:22px; display:block; filter:drop-shadow(0 1px 3px rgba(0,0,0,.15)); }
+
+/* NEW — ticks on the bar */
+.rail-tick{
+  position:absolute; top:0; transform:translateX(-50%);
+  width:0; height:100%; pointer-events:none;
+  background-color: #ac8e69;
+}
+.rail-tick .tick-dot{
+  position:absolute; top:50%; left:0; transform:translate(-50%,-50%);
+  width:18px; height:18px; border-radius:50%;
+  background:#fff; border:3px solid #d8d8d8; box-shadow:0 0 0 1px rgba(0,0,0,.05) inset;
+}
+.rail-tick.unlocked .tick-dot{ border-color:var(--secondary); background:#c4a178; }
+.rail-tick .tick-label{
+  position:absolute; top:calc(100% + 8px); left:0; transform:translateX(-50%);
+  font-weight:700; color:#33423f; font-size:14px; white-space:nowrap;
+}
+/* Ticks under the rail */
+.points-tier{ display:flex; align-items:center; gap:10px; flex:1; min-width:70px; }
+.points-tier .tier-dot{ width:12px; height:12px; border-radius:50%; background:#d6d6d6; }
+.points-tier .tier-dot.unlocked{ background:var(--secondary); }
+.points-tier .tier-label{ font-weight:600; font-size:14px; color:#33423f; }
+
+/* ---------- Redeem options ---------- */
+.redeem-title{ font-size:22px; font-weight:600; text-align:center; margin:18px 0 8px; }
+.redeem-points-status{ text-align:center; margin-bottom:12px; }
+.redeem-options{ display:inline-flex; gap:16px; margin-top:16px; }
+.redeem-option{
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px; text-align:center;
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+.redeem-option:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
+.redeem-option h4{ margin:0 0 6px; font-size:18px; }
+.redeem-option p{ margin:0 0 12px; color:#666; font-size:14px; }
+.redeem-discount{
+  width:100%; padding:12px 16px; border:none; border-radius:var(--radius); cursor:pointer; font-weight:600;
+  background:var(--primary); color:#fff;
+}
+.redeem-discount:hover{ background:#5e1129; }
+#last-discount-code{ margin-top:12px; text-align:center; color:var(--secondary); font-weight:500; }
+#redeem-message{ margin-top:10px; text-align:center; font-weight:600; }
+
+/* ---------- Refer-a-friend ---------- */
+.refer-intro{ margin-bottom:10px; text-align:center; }
+.referral-link-box{ display:flex; gap:10px; flex-wrap:wrap; margin:14px 0 18px; }
+.referral-url-display{
+  flex:1; min-width:220px; padding:12px 14px; background:var(--light); border:1px solid var(--border); border-radius:8px;
+  font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.copy-referral-btn{ padding:12px 18px; border:none; border-radius:8px; background:var(--secondary); color:#fff; font-weight:700; cursor:pointer; }
+.share-buttons{ display:flex; flex-wrap:wrap; gap:10px; }
+.share-btn{
+  display:flex; align-items:center; gap:8px; padding:8px 14px; background:#fff; border:1px solid var(--border);
+  border-radius:20px; cursor:pointer; transition:background .15s ease;
+}
+.share-btn:hover{ background:#f4f4f2; }
+
+/* ---------- Referral progress (existing IDs) ---------- */
+.ref-progress{ margin-top:14px; }
+.progress-bar-container{ width:100%; height:10px; background:var(--rail); border-radius:999px; overflow:hidden; position:relative; }
+#progress-bar.progress-bar-fill{
+  height:100%; width:0%; background:linear-gradient(90deg, var(--gradient1), var(--gradient2));
+  border-radius:999px; transition:width .45s ease;
+}
+.milestone-indicators{ position:relative; height:70px; margin-top:14px; }
+.milestone{ position:absolute; transform:translateX(-50%); text-align:center; }
+.milestone-dot{
+  width:12px; height:12px; border-radius:50%; background:var(--secondary); margin:0 auto 5px;
+  border:2px solid #fff; box-shadow:0 0 0 1px var(--border);
+}
+.milestone-value{ font-weight:600; }
+.milestone-reward{ font-size:14px; cursor:pointer; }
+
+/* Misc */
+.loading-indicator{
+  display:inline-block; width:18px; height:18px; border:2px solid rgba(255,255,255,.3);
+  border-radius:50%; border-top-color:#fff; animation:spin .8s linear infinite; margin-right:8px;
+}
+@keyframes spin{ to{ transform:rotate(360deg);} }
+
+@media (max-width:768px){
+  .points-balance .big{ font-size:44px; }
+}
+/* Redeem carousel containment */
+.redeem-wrap .scrollable-with-controls {
+  position: relative;
+  max-width: 100%;
+  overflow: hidden; /* Prevent overflow */
+}
+
+.redeem-wrap .scroll-area {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.redeem-wrap .scroll-area::-webkit-scrollbar {
+  display: none;
+}
+
+.redeem-wrap .redeem-options {
+  display: flex;
+  gap: 16px;
+  padding: 4px 20px;
+}
+
+.redeem-wrap .redeem-option {
+  flex: 0 0 250px;
+  scroll-snap-align: start;
+}
+/* On larger screens, make cards wider so only 3 fit */
+@media (min-width: 1000px) {
+  .redeem-wrap .redeem-option {
+    flex: 0 0 calc(33.333% - 11px); /* Show exactly 3 items */
+  }
+}
+
+.redeem-wrap scroll-carousel {
+  position: relative;
+}
+/* Position buttons absolutely within the container */
+.redeem-wrap scroll-carousel .circle-button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  background: white; /* Ensure buttons are visible */
+}
+
+
+.redeem-wrap scroll-carousel .circle-button[is="prev-button"] {
+  left: 0;
+}
+
+.redeem-wrap scroll-carousel .circle-button[is="next-button"] {
+  right: 0;
+}
+
+/* ---------- Minimalist earn points list ---------- */
+.earn-card { 
+  margin-top: 24px; 
+  padding: 20px;
+  background: #fafaf8;
+  border-radius: var(--radius);
+}
+
+.earn-title { 
+  font-size: 18px; 
+  font-weight: 600; 
+  margin-bottom: 20px; 
+  color: var(--dark);
+}
+
+.earn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.earn-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid #eee;
+  transition: all 0.3s ease;
+}
+
+.earn-item:last-child {
+  border-bottom: none;
+}
+
+.earn-item.claimed {
+  opacity: 0.5;
+  order: 999; /* Moves to bottom */
+}
+
+.earn-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.earn-check {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #ccc;
+  transition: all 0.2s ease;
+}
+
+.earn-item.claimed .earn-check {
+  color: var(--success);
+}
+
+.earn-label {
+  font-size: 15px;
+  color: var(--dark);
+}
+
+.earn-item.claimed .earn-label {
+  text-decoration: line-through;
+  color: #999;
+}
+
+.earn-item-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.points-badge {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--secondary);
+}
+
+.earn-btn, .earn-link {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.earn-btn:hover, .earn-link:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.earn-item.claimed .earn-btn {
+  display: none;
+}
+
+/* Remove the old table styles */
+.earn-table { display: none; }
+
+/* Discount code display */
+.discount-code-field {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.discount-code-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #f8f8f8;
+  font-family: monospace;
+  font-size: 13px;
+  color: var(--dark);
+  text-align: center;
+}
+
+.copy-code-btn {
+  padding: 8px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.copy-code-btn:hover {
+  background: #f0f0f0;
+}
+
+.copy-code-btn.copied {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.copy-code-btn.copied svg {
+  stroke: white;
+}
+
+.ref-hidden {
+  display:none !important;
+}
+#referral-url-display.discount-code-input {
+  font-family: inherit !important;
+  font-size: 13px !important;
+  min-width: 350px;
+  text-align: left !important;
+}
+@media (min-width: 768px) {
+  #referral-url-display.discount-code-input {
+    min-width: 500px;
+  }
+}
+
+/* ===================== Tier Cards (H&O Tiers) ===================== */
+.tiers-wrap{
+  margin-top: 24px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+
+.tiers-title{
+  text-align:center;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  margin: 0 0 18px;
+  color: var(--dark);
+}
+
+.tiers-grid{
+  display:grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.tier-card{
+  background:#fff;
+  border: 1px solid #111;
+  border-radius: 2px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  min-height: 380px;
+}
+
+.tier-top{
+  padding: 22px 18px 14px;
+  text-align:center;
+}
+
+.tier-icon{
+  width: 74px;
+  height: 74px;
+  margin: 8px auto 16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.tier-icon img{
+  width: 100%;
+  height: auto;
+  display:block;
+}
+
+.tier-name{
+  font-weight: 800;
+  letter-spacing: .06em;
+  margin: 0 0 10px;
+}
+
+.tier-sub{
+  margin: 0;
+  font-size: 14px;
+  color:#111;
+}
+
+.tier-band{
+  background:#000;
+  color:#fff;
+  text-align:center;
+  font-weight:700;
+  padding: 14px 12px;
+  letter-spacing:.02em;
+}
+
+.tier-body{
+  padding: 18px 18px 22px;
+  text-align:center;
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+  flex:1;
+}
+
+.tier-perks{
+  margin: 0;
+  padding: 0;
+  list-style:none;
+  display:flex;
+  flex-direction:column;
+  gap: 8px;
+  font-size: 14px;
+  color:#111;
+}
+
+.tier-perks li{
+  line-height: 1.35;
+}
+
+/* Responsive */
+@media (max-width: 1100px){
+  .tiers-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px){
+  .tiers-grid{ grid-template-columns: 1fr; }
+  .tier-card{ min-height: unset; }
+}
+
+/* ===== Tier Progress Rail ===== */
+.tier-rail {
+  position: relative;
+  padding-bottom: 60px; /* Space for tier labels below */
+  padding-top: 32px; /* Space for spend indicator above */
+  overflow: visible;
+}
+
+/* Current spend indicator */
+.tier-spend-indicator {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: left 0.4s ease;
+  z-index: 10;
+}
+
+.tier-spend-indicator .spend-amount {
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.tier-spend-indicator .spend-arrow {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid var(--primary);
+  margin-top: 2px;
+}
+
+.tier-mark{
+  position:absolute;
+  top:0;
+  transform: translateX(-50%);
+  width:0;
+  height:100%;
+  pointer-events:none;
+}
+
+.tier-mark .tick-dot{
+  position:absolute;
+  top:50%;
+  left:0;
+  transform:translate(-50%,-50%);
+  width:14px;
+  height:14px;
+  border-radius:50%;
+  background:#fff;
+  border:3px solid #d8d8d8;
+  transition: all 0.3s ease;
+}
+
+.tier-mark.unlocked .tick-dot{
+  background: var(--secondary);
+  border-color: var(--secondary);
+}
+
+.tier-meta{
+  position:absolute;
+  top: calc(100% + 14px);
+  left:0;
+  transform: translateX(-50%);
+  text-align:center;
+  white-space:nowrap;
+}
+
+/* First tier - align left */
+.tier-mark:first-child .tier-meta {
+  transform: translateX(0);
+  text-align: left;
+}
+
+/* Last tier - align right */
+.tier-mark:last-child .tier-meta {
+  transform: translateX(-100%);
+  text-align: right;
+}
+
+.tier-amount{
+  font-size:12px;
+  color:#999;
+  margin-bottom: 2px;
+}
+
+.tier-name-sm{
+  font-weight:700;
+  letter-spacing:.03em;
+  font-size:13px;
+  color: var(--dark);
+  text-transform: uppercase;
+}
+
+.tier-mark.unlocked .tier-name-sm {
+  color: var(--secondary);
+}
+
+.tier-next-message{
+  text-align:left;
+  margin-top:16px;
+  font-size:14px;
+  color:#666;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #faf9f7 0%, #f5f4f2 100%);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--secondary);
+}
+
+.tier-next-message b {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.tier-next-message .current-tier {
+  color: var(--secondary);
+  font-weight: 700;
+}
+
+/* Responsive tier labels */
+@media (max-width: 600px) {
+  .tier-rail {
+    padding-bottom: 50px;
+  }
+  .tier-amount {
+    font-size: 10px;
+  }
+  .tier-name-sm {
+    font-size: 11px;
+  }
+  .tier-meta {
+    top: calc(100% + 10px);
+  }
+  .points-balance {
+    flex-direction: column;
+    gap: 20px;
+  }
+  .points-rail {
+    width: 100%;
+  }
+  /* Points showcase responsive */
+  .points-showcase {
+    padding: 24px 16px;
+  }
+  .points-showcase .big {
+    font-size: 44px;
+  }
+  .points-icon {
+    width: 40px;
+    height: 40px;
+  }
+  .points-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  /* Tier journey responsive */
+  .tier-journey {
+    padding: 20px 16px;
+  }
+  .tier-journey-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .tier-journey-title {
+    font-size: 14px;
+  }
+}
+
+/* ===================== Your Rewards Section ===================== */
+.your-rewards-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  margin-top: 16px;
+}
+.your-rewards-title {
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dark);
+  margin: 0 0 20px;
+}
+.rewards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.reward-card {
+  background: #fafaf9;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+.reward-card:hover { border-color: #ddd; }
+.reward-card-header {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  cursor: pointer;
+  gap: 14px;
+}
+.reward-icon {
+  width: 40px;
+  height: 40px;
+  background: #f0f0ee;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.reward-icon svg { width: 20px; height: 20px; stroke: #888; }
+.reward-info { flex: 1; min-width: 0; }
+.reward-name { font-weight: 600; font-size: 15px; color: var(--dark); margin: 0 0 2px; }
+.reward-date { font-size: 12px; color: #999; margin: 0; }
+.reward-arrow {
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.2s ease;
+}
+.reward-arrow svg { width: 16px; height: 16px; stroke: #ccc; }
+.reward-card.expanded .reward-arrow { transform: rotate(90deg); }
+.reward-card-body {
+  display: none;
+  padding: 0 16px 16px;
+  border-top: 1px solid #eee;
+}
+.reward-card.expanded .reward-card-body { display: block; }
+.reward-code-section { padding-top: 16px; }
+.reward-code-label {
+  font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.08em; color: #888; margin-bottom: 8px;
+}
+.reward-code-field { display: flex; gap: 4px; margin-bottom: 12px; }
+.reward-code-input {
+  flex: 1; padding: 10px 12px;
+  border: 1px solid #ddd; border-radius: 4px;
+  background: #fff; font-family: monospace;
+  font-size: 13px; color: var(--dark);
+}
+.reward-copy-btn {
+  padding: 10px; background: white;
+  border: 1px solid #ddd; border-radius: 4px;
+  cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+  transition: all 0.2s ease;
+}
+.reward-copy-btn:hover { background: #f0f0f0; }
+.reward-copy-btn.copied { background: var(--success); border-color: var(--success); }
+.reward-copy-btn.copied svg { stroke: white; }
+.reward-cancel-link {
+  background: none; border: none; color: #999;
+  font-size: 12px; text-decoration: underline;
+  cursor: pointer; padding: 0;
+}
+.reward-cancel-link:hover { color: var(--primary); }
+.no-rewards-message {
+  text-align: center; padding: 24px;
+  color: #999; font-size: 14px;
+}
+.reward-status-badge {
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 3px 8px; border-radius: 10px; margin-left: auto;
+}
+.reward-status-badge.active { background: #e6f7ed; color: var(--success); }
+.reward-status-badge.used { background: #f0f0f0; color: #999; }
+@media (max-width: 600px) {
+  .rewards-grid { grid-template-columns: 1fr; }
+  .your-rewards-section { padding: 20px 16px; }
+}
+
+/* ===================== Unlock Rewards Section ===================== */
+.unlock-rewards-section {
+  background: linear-gradient(135deg, #f5f5f3 0%, #efeee9 100%);
+  padding: 48px 32px;
+}
+
+.unlock-rewards-heading {
+  font-size: clamp(36px, 6vw, 56px);
+  font-weight: 400;
+  line-height: 1.1;
+  color: #1a1a1a;
+  margin: 0 0 16px;
+  letter-spacing: -1px;
+}
+
+.unlock-rewards-subtext {
+  font-size: 16px;
+  color: #666;
+  margin: 0 0 40px;
+  max-width: 500px;
+}
+
+.unlock-rewards-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 20px;
+  align-items: stretch;
+}
+
+.unlock-box {
+  border-radius: 8px;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.unlock-box-points {
+  background: #f0eeea;
+  padding: 40px 32px;
+  text-align: left;
+}
+
+.unlock-points-number {
+  font-size: clamp(48px, 8vw, 72px);
+  font-weight: 400;
+  color: var(--primary);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.unlock-points-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: #666;
+  text-transform: uppercase;
+}
+
+.unlock-box-referral {
+  background: #1f6d5f;
+  padding: 32px;
+}
+
+.unlock-referral-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 20px;
+  height: 100%;
+}
+
+.unlock-referral-text {
+  flex: 1;
+}
+
+.unlock-referral-title {
+  font-size: clamp(20px, 3vw, 28px);
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 8px;
+}
+
+.unlock-referral-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.unlock-referral-link-wrapper {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 30px;
+  padding: 4px;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.unlock-referral-input {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  padding: 10px 16px;
+  width: 100%;
+  min-width: 280px;
+  outline: none;
+  white-space: nowrap;
+}
+
+.unlock-referral-input::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.unlock-copy-btn {
+  background: #fff;
+  border: none;
+  border-radius: 24px;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.unlock-copy-btn:hover {
+  background: #f0f0f0;
+  transform: scale(1.02);
+}
+
+.unlock-copy-btn.copied {
+  background: var(--success);
+  color: #fff;
+}
+
+/* Mobile: Stack the boxes */
+@media (max-width: 768px) {
+  .unlock-rewards-section {
+    padding: 32px 20px;
+  }
+
+  .unlock-rewards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .unlock-box-points {
+    padding: 32px 24px;
+  }
+
+  .unlock-box-referral {
+    padding: 24px;
+  }
+
+  .unlock-referral-link-wrapper {
+    width: 100%;
+    flex-direction: row;
+  }
+
+  .unlock-referral-input {
+    min-width: 0;
+    flex: 1;
+    font-size: 12px;
+  }
+}
+</style>
+
+<div class="account-referrals">
+  <div class="account-header">
+    <div class="header-content">
+      <span class="rewards-title"><img src="https://www.hemlockandoak.com/cdn/shop/files/lighter-logo-horizontal.png"> <h1 class="account-header-font">Rewards</h1></span>
+    </div>
+    <p id="referral-url-message" style="display:none;"></p>
+  </div>
+
+
+
+  <!-- ===================== SECTION 1: UNLOCK REWARDS ===================== -->
+  <section class="unlock-rewards-section" aria-labelledby="rewards-heading">
+    <h2 class="unlock-rewards-heading">unlock rewards,<br>share the love.</h2>
+    <p class="unlock-rewards-subtext">Earn points for every purchase and give friends a discount on their first order.</p>
+
+    <div class="unlock-rewards-grid">
+      <!-- Left Box: Points Display -->
+      <div class="unlock-box unlock-box-points">
+        <div class="unlock-points-number" id="available-points">0</div>
+        <div class="unlock-points-label">AVAILABLE POINTS</div>
+      </div>
+
+      <!-- Right Box: Referral -->
+      <div class="unlock-box unlock-box-referral">
+        <div class="unlock-referral-content">
+          <div class="unlock-referral-text">
+            <h3 class="unlock-referral-title">Give $15, Get 1,500 pts</h3>
+            <p class="unlock-referral-subtitle">They get a discount, you get closer to your reward.</p>
+          </div>
+          <div class="unlock-referral-link-wrapper">
+            <input type="text" id="referral-url-display" class="unlock-referral-input" readonly value="">
+            <button id="copy-referral-btn" class="unlock-copy-btn">Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden elements for share functionality -->
+    <div style="display: none;">
+      <button id="share-email"></button>
+      <button id="share-facebook"></button>
+      <button id="share-twitter"></button>
+      <span id="referral-count">0</span>
+    </div>
+  </section>
+
+  <!-- ===================== SECTION 2: TIER JOURNEY ===================== -->
+  {%- assign tiers = section.blocks | where: "type", "tier" -%}
+  <section class="tier-journey" aria-labelledby="tier-journey-heading">
+    <div class="tier-journey-header">
+      <h3 class="tier-journey-title" id="tier-journey-heading">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+          <polyline points="17 6 23 6 23 12"></polyline>
+        </svg>
+        Your Tier Progress
+      </h3>
+      <span id="current-tier-badge" class="tier-current-badge">Bronze</span>
+    </div>
+
+    <div class="points-rail">
+      <div
+        class="tier-rail"
+        data-spend="{% if customer %}{{ customer.total_spent | money_without_currency | replace: ',', '' | replace: '$', '' }}{% else %}0{% endif %}"
+      >
+        <!-- Current spend indicator (positioned above the rail) -->
+        <div id="tier-spend-indicator" class="tier-spend-indicator" style="left:0%;">
+          <span class="spend-amount">$0</span>
+          <span class="spend-arrow"></span>
+        </div>
+
+        <div class="rail" aria-hidden="true">
+          <div id="tier-progress-fill" class="rail-fill" style="width:0%;"></div>
+
+          <!-- Marks from tier blocks -->
+          {%- for block in tiers -%}
+            <div class="tier-mark" data-threshold="{{ block.settings.spend_threshold | default: 0 }}">
+              <span class="tick-dot"></span>
+              <div class="tier-meta">
+                <div class="tier-amount">${{ block.settings.spend_threshold }}</div>
+                <div class="tier-name-sm">{{ block.settings.name | escape }}</div>
+              </div>
+            </div>
+          {%- endfor -%}
+        </div>
+      </div>
+    </div>
+
+    <!-- Tier progress message -->
+    <div id="tier-next-message" class="tier-next-message"></div>
+  </section>
+
+  <!-- ===================== YOUR REWARDS SECTION ===================== -->
+  <section class="your-rewards-section" id="your-rewards-section" style="display: none;">
+    <h3 class="your-rewards-title">Your Rewards</h3>
+    <div class="rewards-grid" id="rewards-grid">
+      <!-- Rewards will be populated by JavaScript -->
+    </div>
+    <div class="no-rewards-message" id="no-rewards-message" style="display: none;">
+      You haven't redeemed any rewards yet. Earn points and redeem them below!
+    </div>
+  </section>
+
+<div class="redeem-wrap">
+  <br>You have <span id="points-display-redeem">0</span> points available. Choose a reward below!
+  
+  <div class="scrollable-with-controls">
+    <scroll-carousel
+      selector=".redeem-options > *"
+      id="scroll-area-redeem"
+      class="scroll-area bleed {% if 5 > 3 %}is-scrollable{% endif %}"
+    >
+      <div class="redeem-options">
+        {% assign redemptionOptions = "5:500,10:1000,20:2000,30:3000" | split: "," %}
+        {% for option in redemptionOptions %}
+          {% assign parts = option | split: ":" %}
+          <div class="redeem-option carousel-item">
+            <b>{{ parts[0] }} CAD off coupon</b>
+            <p>{{ parts[1] }} Points</p>
+            <button class="redeem-discount" data-points="{{ parts[1] }}" data-value="{{ parts[0] }}CAD">Redeem</button>
+          </div>
+        {% endfor %}
+      </div>
+    </scroll-carousel>
+    
+    {%- assign items_visible = 3 -%}
+    {%- assign total_items = 5 -%}
+    {%- assign default_progress = items_visible | times: 1.0 | divided_by: total_items -%}
+    {%- render 'scrollbar', observes: 'scroll-area-redeem', default_progress: default_progress, show_buttons: false -%}
+  </div>
+  <div class="ref-hidden">
+  <button id="redeem-another" style="display:none;">Redeem Another</button>
+  <p id="last-discount-code"></p>
+  <div id="redeem-message"></div> </div>
+</div>
+
+<!-- ===================== H&O TIERS (Dynamic Blocks) ===================== -->
+{%- assign tier_blocks = section.blocks | where: "type", "tier" -%}
+
+{%- if tier_blocks.size > 0 -%}
+  <section class="tiers-wrap" aria-labelledby="tiers-heading">
+    <h6 id="tiers-heading" class="tiers-title">
+      {{ section.settings.tiers_heading | escape }}
+    </h6>
+
+    <div class="tiers-grid">
+      {%- for block in tier_blocks -%}
+        <div class="tier-card" {{ block.shopify_attributes }}>
+          <div class="tier-top">
+            <div class="tier-icon">
+              {%- if block.settings.icon != blank -%}
+                <img
+                  src="{{ block.settings.icon | image_url: width: 160 }}"
+                  alt="{{ block.settings.name | escape }} tier"
+                  loading="lazy"
+                >
+              {%- else -%}
+                <!-- Fallback: simple circle -->
+                <svg viewBox="0 0 64 64" width="74" height="74" aria-hidden="true">
+                  <circle cx="32" cy="32" r="22" fill="#ddd"></circle>
+                </svg>
+              {%- endif -%}
+            </div>
+
+            <div class="tier-name">{{ block.settings.name | escape }}</div>
+
+            {%- if block.settings.subtitle != blank -%}
+              <p class="tier-sub">{{ block.settings.subtitle | escape }}</p>
+            {%- endif -%}
+          </div>
+
+          <div class="tier-band">
+            {{ block.settings.points_per_dollar | escape }}
+          </div>
+
+          <div class="tier-body">
+            {%- if block.settings.perks != blank -%}
+              {%- assign perks = block.settings.perks | newline_to_br | split: "<br />" -%}
+              <ul class="tier-perks">
+                {%- for perk in perks -%}
+                  {%- assign p = perk | strip -%}
+                  {%- if p != blank -%}
+                    <li>{{ p }}</li>
+                  {%- endif -%}
+                {%- endfor -%}
+              </ul>
+            {%- endif -%}
+          </div>
+        </div>
+      {%- endfor -%}
+    </div>
+  </section>
+{%- endif -%}
+
+<div class="earn-card">
+  <h6 class="ref-h6">Earn points. Get more rewards.</h6>
+  <br>As a member, you'll collect points on almost everything you buy. Those points add up to some amazing rewards. Look out for some surprises and members-only extras in your inbox!
+  <div class="earn-list">
+    <!-- Purchase (always at top, can't be claimed) -->
+    <div class="earn-item" id="earning-purchase">
+      <div class="earn-item-left">
+        <span class="earn-check">○</span>
+        <span class="earn-label">Make a purchase</span>
+      </div>
+      <div class="earn-item-right">
+        <span class="points-badge">+5 / $1</span>
+        <a href="/collections/all" class="earn-link">Shop →</a>
+      </div>
+    </div>
+    
+    <!-- Social actions -->
+    <div class="earn-item" id="earning-instagram">
+      <div class="earn-item-left">
+        <span class="earn-check">○</span>
+        <span class="earn-label">Follow on Instagram</span>
+      </div>
+      <div class="earn-item-right">
+        <span class="points-badge">+50</span>
+        <button class="earn-btn" data-action="instagram">Follow</button>
+      </div>
+    </div>
+    
+    <div class="earn-item" id="earning-community">
+      <div class="earn-item-left">
+        <span class="earn-check">○</span>
+        <span class="earn-label">Join our community</span>
+      </div>
+      <div class="earn-item-right">
+        <span class="points-badge">+50</span>
+        <button class="earn-btn" data-action="community">Join</button>
+      </div>
+    </div>
+    
+    <div class="earn-item" id="earning-facebook">
+      <div class="earn-item-left">
+        <span class="earn-check">○</span>
+        <span class="earn-label">Like on Facebook</span>
+      </div>
+      <div class="earn-item-right">
+        <span class="points-badge">+50</span>
+        <button class="earn-btn" data-action="facebook">Like</button>
+      </div>
+    </div>
+    
+    <div class="earn-item" id="earning-youtube">
+      <div class="earn-item-left">
+        <span class="earn-check">○</span>
+        <span class="earn-label">Subscribe on YouTube</span>
+      </div>
+      <div class="earn-item-right">
+        <span class="points-badge">+50</span>
+        <button class="earn-btn" data-action="youtube">Subscribe</button>
+      </div>
+    </div>
+  </div>
+  
+</div>
+</div>
+
+<!-- ===================== FAQ (Accordion) ===================== -->
+<div class="rewards-faq" style="margin-top: 24px;">
+  {%- if section.settings.faq_subheading != blank -%}
+    <p class="subheading">{{ section.settings.faq_subheading | escape }}</p>
+  {%- endif -%}
+
+  {%- if section.settings.faq_heading != blank -%}
+    <h6 class="ref-h6">{{ section.settings.faq_heading | escape }}</h6>
+  {%- endif -%}
+
+  {%- if section.settings.faq_content != blank -%}
+    <div class="prose" style="margin-top: 12px;">
+      {{ section.settings.faq_content }}
+    </div>
+  {%- endif -%}
+
+  <div style="margin-top: 16px;">
+    <div {% render 'surface', class: 'accordion-box rounded', background: section.settings.faq_accordion_background, text_color: section.settings.faq_accordion_text_color, background_fallback: 'bg-secondary' %}>
+      {%- for block in section.blocks -%}
+        {%- if block.type == 'faq_item' and block.settings.title != blank and block.settings.content != blank -%}
+          {%- capture accordion_content -%}
+            <div class="prose">{{ block.settings.content }}</div>
+          {%- endcapture -%}
+
+          {%- render 'accordion', title: block.settings.title, content: accordion_content, block: block -%}
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+  </div>
+</div>
+
+
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const apiBaseUrl   = 'https://referral-program-448vr.kinsta.app';
+  const apiReviewUrl = apiBaseUrl; // Consolidated to single server
+
+  const messageDiv         = document.getElementById('referral-url-message');
+  const referralUrlDisplay = document.getElementById('referral-url-display');
+  const copyReferralBtn    = document.getElementById('copy-referral-btn');
+  const nextRewardMessage  = document.getElementById('next-reward-message');
+
+  const urlParams = new URLSearchParams(window.location.search);
+  let emailFromQuery = urlParams.get('email');
+  const customerEmail = "{{ customer.email | escape }}";
+  if (!emailFromQuery && customerEmail && customerEmail !== "") emailFromQuery = customerEmail;
+
+  const __isLoggedIn = {% if customer %}true{% else %}false{% endif %};
+  const effectiveEmail = emailFromQuery || customerEmail;
+
+  const referralGoal = {{ section.settings.referral_goal | default: 50 }};
+  let currentUserPoints = 0;
+  let referralCount = 0;
+  window.referralFirstName = '';
+
+  function showNotification(message, isError=false){
+    const n = document.getElementById('referral-notification');
+    const m = document.getElementById('notification-message');
+    if (!n || !m) return;
+    m.textContent = message;
+    n.style.display = 'flex';
+    n.classList.toggle('error', !!isError);
+    setTimeout(()=>{ n.style.display='none'; }, 5000);
+  }
+  const closeBtn = document.querySelector('.notification-close');
+  if (closeBtn) closeBtn.addEventListener('click', () => {
+    const n = document.getElementById('referral-notification'); if (n) n.style.display='none';
+  });
+
+  /* ---------- Copy link ---------- */
+ // Update the existing copy link handler
+ if (copyReferralBtn) {
+  copyReferralBtn.addEventListener('click', function(){
+    const text = referralUrlDisplay?.value?.trim() || referralUrlDisplay?.textContent?.trim() || '';
+    
+    navigator.clipboard.writeText(text).then(() => {
+      copyReferralBtn.classList.add('copied');
+      setTimeout(() => copyReferralBtn.classList.remove('copied'), 2000);
+    }).catch(() => {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      copyReferralBtn.classList.add('copied');
+      setTimeout(() => copyReferralBtn.classList.remove('copied'), 2000);
+    });
+  });
+ }
+
+  /* ---------- Share buttons ---------- */
+  const openSite = (url)=>{ if (url) window.open(url,'_blank','noopener,noreferrer,width=1000,height=800'); };
+  document.getElementById('share-email')?.addEventListener('click', function(){
+    const referralUrl = referralUrlDisplay?.textContent?.trim() || location.href;
+    const subject = "Check out Hemlock & Oak stationery!";
+    const body = `Hey! Use my referral link to sign up:\n\n${referralUrl}`;
+    if (navigator.share){ navigator.share({title:subject,text:body,url:referralUrl}).catch(()=>{}); return; }
+    const encSub = encodeURIComponent(subject), encBody = encodeURIComponent(body);
+    window.location.href = `mailto:?subject=${encSub}&body=${encBody}`;
+  });
+  document.getElementById('share-facebook')?.addEventListener('click', ()=> openSite('https://www.facebook.com/hemlockandoak'));
+  document.getElementById('share-twitter')?.addEventListener('click', ()=> openSite('https://x.com/hemlockandoak'));
+
+  /* ---------- Hide if no email ---------- */
+  if (!emailFromQuery){
+    messageDiv.innerHTML = 'No referral email provided. Please <a href="/pages/email-signup" style="color:var(--primary); text-decoration:underline;">sign up here</a> first.';
+    messageDiv.style.display='block'; messageDiv.style.color='var(--error)';
+    document.querySelectorAll('.rewards-shell, .referrals-shell').forEach(el=> el.style.display='none');
+    return;
+  }
+
+  /* ---------- Helpers ---------- */
+  function updateReferralProgress(count){
+    const bar = document.getElementById('progress-bar');
+    const goal = parseInt(bar?.dataset?.goal || referralGoal, 10) || referralGoal;
+    const pct = Math.max(0, Math.min(100, (count/goal)*100));
+    if (bar){ bar.style.width = pct + '%'; bar.setAttribute('aria-valuenow', count); }
+  }
+
+  // PATCH: also drive the new POINTS rail & marker using the same update used for text
+  function updatePointsRail(points){
+  // Derive max from the largest tick we find; fallback to 3000
+  const ticks = Array.from(document.querySelectorAll('.rail-tick'));
+  const tickValues = ticks.map(t => parseInt(t.dataset.points, 10)).filter(n => Number.isFinite(n));
+  const max = tickValues.length ? Math.max(...tickValues) : 3000;
+
+  // Move fill and marker
+  const pct = Math.max(0, Math.min(100, (points / max) * 100));
+  const fill = document.getElementById('points-progress-bar');
+  const marker = document.getElementById('points-progress-marker');
+  if (fill) fill.style.width = pct + '%';
+  if (marker) marker.style.left = pct + '%';
+
+  // Position ticks along the rail and toggle unlocked state
+  ticks.forEach(t => {
+    const need = parseInt(t.dataset.points, 10) || 0;
+    const leftPct = Math.max(0, Math.min(100, (need / max) * 100));
+    t.style.left = leftPct + '%';
+    t.classList.toggle('unlocked', points >= need);
+  });
+
+  // Back-compat: also light up old dots if they still exist
+  document.querySelectorAll('.points-tier .tier-dot').forEach(dot => {
+    const need = parseInt(dot.dataset.points, 10) || 0;
+    dot.classList.toggle('unlocked', points >= need);
+  });
+}
+
+function updateTierProgressRail(){
+  const railWrap = document.querySelector('.tier-rail');
+  if (!railWrap) return;
+
+  const spendRaw = railWrap.dataset.spend || '0';
+  const spend = Number(String(spendRaw).replace(/[^0-9.]/g,'')) || 0;
+
+  const marks = Array.from(railWrap.querySelectorAll('.tier-mark'));
+
+  // Build tier data with names
+  const tierData = marks.map(m => ({
+    threshold: Number(m.dataset.threshold || 0),
+    name: m.querySelector('.tier-name-sm')?.textContent || 'Unknown',
+    element: m
+  })).sort((a,b) => a.threshold - b.threshold);
+
+  if (!tierData.length) return;
+
+  const max = tierData[tierData.length - 1].threshold || 1;
+
+  // Fill %
+  const pct = Math.max(0, Math.min(100, (spend / max) * 100));
+  const fill = document.getElementById('tier-progress-fill');
+  if (fill) fill.style.width = pct + '%';
+
+  // Position and update spend indicator
+  const spendIndicator = document.getElementById('tier-spend-indicator');
+  if (spendIndicator) {
+    spendIndicator.style.left = pct + '%';
+    const amountEl = spendIndicator.querySelector('.spend-amount');
+    if (amountEl) amountEl.textContent = '$' + spend.toFixed(0);
+    // Always keep centered - arrow points to exact position
+    spendIndicator.style.transform = 'translateX(-50%)';
+  }
+
+  // Position each tier marker on the rail + unlocked state
+  tierData.forEach(tier => {
+    const leftPct = Math.max(0, Math.min(100, (tier.threshold / max) * 100));
+    tier.element.style.left = leftPct + '%';
+    tier.element.classList.toggle('unlocked', spend >= tier.threshold);
+  });
+
+  // Find current tier and next tier
+  let currentTier = tierData[0];
+  let nextTier = null;
+
+  for (let i = tierData.length - 1; i >= 0; i--) {
+    if (spend >= tierData[i].threshold) {
+      currentTier = tierData[i];
+      nextTier = tierData[i + 1] || null;
+      break;
+    }
+  }
+
+  // Update current tier badge
+  const tierBadge = document.getElementById('current-tier-badge');
+  if (tierBadge) {
+    tierBadge.textContent = currentTier.name;
+  }
+
+  // Update message
+  const nextMsg = document.getElementById('tier-next-message');
+  if (nextMsg){
+    if (!nextTier){
+      nextMsg.innerHTML = `You're a <span class="current-tier">${currentTier.name}</span> member — our highest tier! Enjoy all your exclusive benefits.`;
+    } else {
+      const remaining = nextTier.threshold - spend;
+      nextMsg.innerHTML = `You're a <span class="current-tier">${currentTier.name}</span> member. Spend <b>$${remaining.toFixed(0)}</b> more to reach <b>${nextTier.name}</b>!`;
+    }
+  }
+}
+
+function updateAvailablePointsDisplay(points){
+  // Format with commas
+  const formattedPoints = points.toLocaleString();
+
+  document.querySelectorAll('#available-points, #points-display-redeem').forEach(el=>{
+    if(el) el.textContent = formattedPoints;
+  });
+  updatePointsRail(points); // Pass raw number to rail update
+}
+
+  /* ---------- Milestones init (referral) ---------- */
+  async function fetchRedeemedState(email){
+    const res = await fetch(`${apiReviewUrl}/api/referral/redeemed-milestones?email=${encodeURIComponent(email)}`);
+    if (!res.ok) throw new Error('Failed to load redeemed milestones');
+    return res.json();
+  }
+  function renderRedeemedCodes(redeemedMilestones){
+    const root = document.getElementById('milestone-codes'); if (!root) return;
+    const entries = Object.entries(redeemedMilestones||{}).sort((a,b)=>Number(a[0])-Number(b[0]));
+    root.innerHTML = entries.length ? entries.map(([pts,code])=>`<div style="font-size:13px; color:#777;">${pts} referrals — <code>${code}</code></div>`).join('') : '';
+  }
+  function enableUnlockedMilestones(refCount, redeemedMilestones={}){
+    document.querySelectorAll('.milestone-reward').forEach(el=>{
+      const req = parseInt(el.dataset.points,10);
+      if (redeemedMilestones[req]){
+        el.textContent='Redeemed'; el.style.pointerEvents='none'; el.style.opacity='.5'; el.style.color='gray'; el.style.fontStyle='italic';
+        const codeEl = document.createElement('div'); codeEl.textContent=`Code: ${redeemedMilestones[req]}`;
+        codeEl.style.fontSize='12px'; codeEl.style.marginTop='4px'; codeEl.style.color='#777'; el.parentElement.appendChild(codeEl);
+        return;
+      }
+      if (refCount >= req){
+        el.style.cursor='pointer';
+        if (!el.dataset.clickBound){
+          el.dataset.clickBound='1';
+          el.addEventListener('click', async ()=>{
+            try{
+              const res = await fetch(`${apiReviewUrl}/api/referral/redeem-milestone`,{
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({ email: emailFromQuery, milestonePoints: req })
+              });
+              const data = await res.json();
+              if (!res.ok || data.error){ showNotification(data.error || 'Error unlocking reward.', true); return; }
+              el.textContent='Redeemed'; el.style.pointerEvents='none'; el.style.opacity='.5'; el.style.color='gray'; el.style.fontStyle='italic';
+              const codeEl = document.createElement('div'); codeEl.textContent=`Code: ${data.discountCode}`;
+              codeEl.style.fontSize='12px'; codeEl.style.marginTop='4px'; codeEl.style.color='#777'; el.parentElement.appendChild(codeEl);
+              showNotification(`${data.rewardName} unlocked! Code: ${data.discountCode}`);
+              const state = await fetchRedeemedState(emailFromQuery);
+              renderRedeemedCodes(state.redeemedMilestones);
+            }catch(e){ showNotification('Error unlocking reward.', true); }
+          }, { once:true });
+        }
+      } else {
+        el.style.cursor='not-allowed'; el.style.opacity='.6'; el.title=`Unlock this reward at ${req} referrals`;
+      }
+    });
+  }
+  (async function initMilestones(){
+    try{
+      const state = await fetchRedeemedState(emailFromQuery);
+      referralCount = Number(state.referralCount||0);
+      renderRedeemedCodes(state.redeemedMilestones||{});
+      enableUnlockedMilestones(referralCount, state.redeemedMilestones||{});
+    }catch(e){ /* noop */ }
+  })();
+
+  /* ---------- Render Your Rewards Section ---------- */
+  function renderYourRewards(rewards) {
+    const section = document.getElementById('your-rewards-section');
+    const grid = document.getElementById('rewards-grid');
+    const noRewardsMsg = document.getElementById('no-rewards-message');
+    if (!section || !grid) return;
+
+    grid.innerHTML = '';
+
+    if (!rewards || (Array.isArray(rewards) && rewards.length === 0)) {
+      section.style.display = 'block';
+      noRewardsMsg.style.display = 'block';
+      return;
+    }
+
+    const rewardsArray = Array.isArray(rewards) ? rewards : [rewards];
+
+    rewardsArray.forEach(reward => {
+      const code = reward.code;
+      const redeemedAt = reward.redeemedAt;
+      const canCancel = reward.canCancel !== false;
+      const isUsed = reward.used === true;
+      const rewardInfo = parseRewardFromCode(code);
+      const timeAgo = redeemedAt ? getTimeAgo(new Date(redeemedAt)) : 'Recently';
+      const statusClass = isUsed ? 'used' : 'active';
+      const statusText = isUsed ? 'Used' : 'Active';
+
+      const card = document.createElement('div');
+      card.className = 'reward-card';
+      card.dataset.code = code;
+      card.innerHTML = `
+        <div class="reward-card-header">
+          <div class="reward-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="8" width="18" height="12" rx="2"/>
+              <path d="M12 8V4M9 4h6"/><circle cx="12" cy="14" r="2"/>
+            </svg>
+          </div>
+          <div class="reward-info">
+            <p class="reward-name">${rewardInfo.name}</p>
+            <p class="reward-date">${timeAgo}</p>
+          </div>
+          <span class="reward-status-badge ${statusClass}">${statusText}</span>
+          <div class="reward-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </div>
+        </div>
+        <div class="reward-card-body">
+          <div class="reward-code-section">
+            <div class="reward-code-label">Your Discount Code</div>
+            <div class="reward-code-field">
+              <input type="text" class="reward-code-input" value="${code}" readonly>
+              <button class="reward-copy-btn" title="Copy code">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+            ${canCancel && !isUsed ? `<button class="reward-cancel-link" data-code="${code}" data-points="${rewardInfo.points}">I don't want this reward</button>` : ''}
+          </div>
+        </div>
+      `;
+
+      // Expand/collapse
+      card.querySelector('.reward-card-header').addEventListener('click', () => card.classList.toggle('expanded'));
+
+      // Copy
+      const copyBtn = card.querySelector('.reward-copy-btn');
+      const codeInput = card.querySelector('.reward-code-input');
+      copyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(codeInput.value).then(() => {
+          copyBtn.classList.add('copied');
+          setTimeout(() => copyBtn.classList.remove('copied'), 2000);
+        }).catch(() => {
+          codeInput.select();
+          document.execCommand('copy');
+          copyBtn.classList.add('copied');
+          setTimeout(() => copyBtn.classList.remove('copied'), 2000);
+        });
+      });
+
+      // Cancel
+      const cancelLink = card.querySelector('.reward-cancel-link');
+      if (cancelLink) {
+        cancelLink.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const pointsToRefund = parseInt(cancelLink.dataset.points, 10);
+          const codeToCancel = cancelLink.dataset.code;
+
+          try {
+            const response = await fetch(`${apiReviewUrl}/api/referral/cancel-redeem`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: emailFromQuery, pointsToRefund, discountCode: codeToCancel })
+            });
+            const responseData = await response.json();
+
+            if (response.ok) {
+              showNotification('Redemption cancelled. Points refunded.');
+              currentUserPoints = responseData.newPoints || 0;
+              updateAvailablePointsDisplay(currentUserPoints);
+              card.remove();
+              if (grid.children.length === 0) noRewardsMsg.style.display = 'block';
+
+            } else {
+              if (responseData.error?.includes('already been used')) {
+                showNotification('This discount code has already been used.', true);
+                cancelLink.style.display = 'none';
+                const badge = card.querySelector('.reward-status-badge');
+                if (badge) { badge.className = 'reward-status-badge used'; badge.textContent = 'Used'; }
+              } else {
+                showNotification(responseData.error || 'Error cancelling.', true);
+              }
+            }
+          } catch (err) {
+            showNotification('Error cancelling redemption.', true);
+          }
+        });
+      }
+
+      grid.appendChild(card);
+    });
+
+    section.style.display = 'block';
+    noRewardsMsg.style.display = 'none';
+  }
+
+  function parseRewardFromCode(code) {
+    const match = code.match(/POINTS(\d+(?:\.\d+)?)CAD_/);
+    if (match) {
+      const dollarValue = parseFloat(match[1]);
+      return { name: `$${dollarValue.toFixed(0)} voucher`, points: dollarValue * 100 };
+    }
+    return { name: 'Discount voucher', points: 0 };
+  }
+
+  function getTimeAgo(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hr ago`;
+    if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+  }
+
+  /* ---------- Load user referral info (also drives both progress bars) ---------- */
+  async function fetchReferralInfo(emailValue){
+    const lastCodeEl = document.getElementById('last-discount-code');
+    try{
+      const resp = await fetch(`${apiBaseUrl}/api/referral/user/${encodeURIComponent(emailValue)}`);
+      const data = await resp.json();
+      if (data.user){
+        referralCount     = data.user.referral_count || 0;
+        currentUserPoints = data.user.points || 0;
+
+        updateReferralProgress(referralCount);
+        updateAvailablePointsDisplay(currentUserPoints);
+        // Update the referral count display
+const referralCountDisplay = document.getElementById('referral-count');
+if (referralCountDisplay) {
+  referralCountDisplay.textContent = referralCount;
+}
+
+        let redeemedMilestones = {};
+        try{ redeemedMilestones = JSON.parse(data.user.referal_discount_code || data.user.milestone_rewards_discount || '{}'); }catch(e){}
+        enableUnlockedMilestones(referralCount, redeemedMilestones);
+        renderRedeemedCodes(redeemedMilestones);
+
+        const referralCode = data.user.referral_code;
+        // In fetchReferralInfo, change this line:
+if (referralUrlDisplay) referralUrlDisplay.textContent = `https://www.hemlockandoak.com/pages/email-signup/?ref=${referralCode}`;
+
+// To this:
+if (referralUrlDisplay) {
+  const url = `https://www.hemlockandoak.com/pages/email-signup/?ref=${referralCode}`;
+  if (referralUrlDisplay.tagName === 'INPUT') {
+    referralUrlDisplay.value = url;
+  } else {
+    referralUrlDisplay.textContent = url;
+  }
+}
+
+showNotification('Successfully retrieved your referral information!');
+
+// Render Your Rewards section with active rewards from API
+const activeRewards = data.user.active_rewards || [];
+renderYourRewards(activeRewards);
+
+          // Check for locked tiers and disable those redeem buttons
+          try {
+            const lockedResponse = await
+  fetch(`${apiReviewUrl}/api/referral/locked-tiers/${encodeURIComponent(emailValue)}`);
+            const lockedData = await lockedResponse.json();
+
+            if (lockedData.lockedTiers && lockedData.lockedTiers.length > 0) {
+              console.log('Locked tiers:', lockedData.lockedTiers);
+
+              document.querySelectorAll('.redeem-discount').forEach(btn => {
+                const tierPoints = parseInt(btn.getAttribute('data-points'));
+                if (lockedData.lockedTiers.includes(tierPoints)) {
+                  btn.disabled = true;
+                  btn.textContent = 'Used';
+                  btn.style.opacity = '0.5';
+                  btn.style.cursor = 'not-allowed';
+                }
+              });
+            }
+          } catch (e) {
+            console.log('Could not fetch locked tiers:', e);
+          }
+
+          } else {
+  // User not found in rewards program - try to auto-enroll them if logged in
+  console.log('User not in rewards yet, checking if they have a Shopify account...');
+  
+  {% if customer %}
+    // They're logged in but not in rewards - add them now
+    try {
+      const signupResponse = await fetch(`${apiBaseUrl}/api/referral/signup`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          email: '{{ customer.email | escape }}',
+          firstName: '{{ customer.first_name | escape }}',
+          shopifyCustomerId: '{{ customer.id }}'
+        })
+      });
+      
+      if (signupResponse.ok) {
+        // Wait a moment then reload their info
+        showNotification('Welcome to our rewards program! You got 100 bonus points!');
+        setTimeout(() => {
+          fetchReferralInfo(emailValue);
+        }, 500);
+      } else {
+        // Signup failed, show original message
+        messageDiv.innerHTML = `You are not registered in our referral program. <a href="/pages/email-signup" style="color:var(--primary)">Sign up here</a>.`;
+        messageDiv.style.display='block'; 
+        messageDiv.style.color='var(--error)';
+        document.querySelectorAll('.rewards-shell, .referrals-shell').forEach(el=> el.style.display='none');
+      }
+    } catch (e) {
+      console.error('Auto-signup failed:', e);
+      messageDiv.innerHTML = `Error creating rewards account. Please try again.`;
+      messageDiv.style.display='block'; 
+      messageDiv.style.color='var(--error)';
+    }
+  {% else %}
+    // Not logged in - ask them to log in
+    messageDiv.innerHTML = `Please <a href="/account/login">log in</a> to access rewards.`;
+    messageDiv.style.display = 'block';
+    messageDiv.style.color='var(--error)';
+    document.querySelectorAll('.rewards-shell, .referrals-shell').forEach(el=> el.style.display='none');
+  {% endif %}
+}
+    }catch(e){
+      messageDiv.textContent='Error connecting to referral service.'; messageDiv.style.color='var(--error)'; messageDiv.style.display='block';
+      showNotification('Connection error', true);
+    }
+  }
+  fetchReferralInfo(emailFromQuery);
+
+  /* ---------- Redeem logic (unchanged IDs/classes) ---------- */
+  function enableAllOptions(){
+    document.querySelectorAll('.redeem-option').forEach(opt=>{ opt.classList.remove('disabled','selected'); });
+    const b = document.getElementById('redeem-another'); if (b) b.style.display='none';
+  }
+  function disableOtherOptions(selectedBtn){
+    const options = document.querySelectorAll('.redeem-option');
+    const btn = document.getElementById('redeem-another');
+    if (options.length <= 1) return;
+    options.forEach(opt=>{
+      if (opt !== selectedBtn.closest('.redeem-option')) opt.classList.add('disabled'); else opt.classList.add('selected');
+    });
+    if (btn) btn.style.display='block';
+  }
+  document.getElementById('redeem-another')?.addEventListener('click', enableAllOptions);
+
+  document.querySelectorAll('.redeem-discount').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const requiredPoints = parseInt(btn.getAttribute('data-points'));
+    const redeemValue = btn.getAttribute('data-value');
+    const redeemMessage = document.getElementById('redeem-message');
+
+    if (!redeemMessage) return;
+
+    // Check points first
+    if (currentUserPoints < requiredPoints) {
+      showNotification('Not enough points to redeem this reward.', true);
+      return;
+    }
+
+    // Show confirmation dialog
+    const confirmRedeem = confirm(`Are you sure you want to redeem ${requiredPoints} points for a ${redeemValue} discount? This action cannot be undone once the code is used.`);
+    if (!confirmRedeem) return;
+
+    const original = btn.textContent;
+    btn.innerHTML = '<span class="loading-indicator"></span> Redeeming...';
+    btn.disabled = true;
+
+    try {
+      const response = await fetch(`${apiReviewUrl}/api/referral/redeem`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          email: emailFromQuery,
+          pointsToRedeem: requiredPoints,
+          redeemType: 'discount',
+          redeemValue
+        })
+      });
+      const data = await response.json();
+      btn.innerHTML = original;
+      btn.disabled = false;
+
+      if (response.ok) {
+        currentUserPoints = data.newPoints || 0;
+        updateAvailablePointsDisplay(currentUserPoints);
+        showNotification(`Success! Your ${redeemValue} discount code has been created. Check "Your Rewards" section below.`);
+
+        // Add to Your Rewards section
+        const newReward = {
+          code: data.discountCode,
+          points: requiredPoints,
+          redeemedAt: new Date().toISOString(),
+          canCancel: true,
+          used: false
+        };
+        // Get existing rewards from grid and re-render with new one
+        const grid = document.getElementById('rewards-grid');
+        const existingCards = grid ? grid.querySelectorAll('.reward-card') : [];
+        const existingRewards = Array.from(existingCards).map(card => ({
+          code: card.dataset.code,
+          points: parseInt(card.dataset.points) || 0,
+          redeemedAt: null,
+          canCancel: !!card.querySelector('.reward-cancel-link'),
+          used: card.querySelector('.reward-status-badge')?.classList.contains('used')
+        }));
+        renderYourRewards([newReward, ...existingRewards]);
+
+        // Scroll to Your Rewards section
+        const rewardsSection = document.getElementById('your-rewards-section');
+        if (rewardsSection) {
+          rewardsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      } else {
+        redeemMessage.textContent = data.error || 'Error redeeming points.';
+        redeemMessage.style.color = 'var(--error)';
+        showNotification('Error redeeming points.', true);
+      }
+    } catch(err) {
+      btn.innerHTML = original;
+      btn.disabled = false;
+      redeemMessage.textContent = 'Connection error.';
+      redeemMessage.style.color = 'var(--error)';
+      showNotification('Connection error.', true);
+    }
+  });
+});
+
+  /* ---------- Earn actions (same containers & buttons) ---------- */
+  // Around line 437-500, replace with:
+const ACTION_META = {
+  instagram: { award: 'social_media_follow', containerId: 'earning-instagram', label: 'Instagram', points: 50, url: 'https://www.instagram.com/hemlockandoak' },
+  community: { award: 'community_join', containerId: 'earning-community', label: 'Community', points: 50, url: 'https://www.facebook.com/groups/930233467699253' },
+  facebook: { award: 'facebook_like', containerId: 'earning-facebook', label: 'Facebook', points: 50, url: 'https://www.facebook.com/hemlockandoak' },
+  youtube: { award: 'youtube_subscribe', containerId: 'earning-youtube', label: 'YouTube', points: 50, url: 'https://www.youtube.com/channel/UCL_7ysj8qv0w1btNwi1t38A' }
+};
+
+function localKey(award){ return `claimed:${emailFromQuery}:${award}`; }
+function lockButton(btn, row) {
+  if (!row) return;
+  row.classList.add('claimed');
+  const check = row.querySelector('.earn-check');
+  if (check) check.textContent = '✓';
+  if (btn) btn.style.display = 'none';
+}
+function successLock(btn, row, label){ lockButton(btn,row,{label, color:'var(--success)'}); }
+
+// Check localStorage for previously claimed actions
+Object.entries(ACTION_META).forEach(([key, meta])=>{
+  const btn = document.querySelector(`.earn-btn[data-action="${key}"]`); // Fixed selector
+  const row = document.getElementById(meta.containerId);
+  if (!btn) return;
+  if (localStorage.getItem(localKey(meta.award))==='1') lockButton(btn, row);
+});
+
+// Add click handlers to earn buttons
+document.querySelectorAll('.earn-btn[data-action]').forEach(btn=>{ // Fixed selector
+  btn.addEventListener('click', async ()=>{
+    const key = btn.getAttribute('data-action'); 
+    const meta = ACTION_META[key]; 
+    if (!meta) return;
+    
+    const row = document.getElementById(meta.containerId);
+    if (btn.dataset.claimed==='true' || row?.classList.contains('claimed')) return;
+    if (meta.url) window.open(meta.url,'_blank');
+
+    const original = btn.textContent;
+    btn.innerHTML = '<span class="loading-indicator"></span> Processing...'; 
+    btn.disabled=true;
+
+    try{
+      const response = await fetch(`${apiBaseUrl}/api/referral/award`,{
+        method:'POST', 
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ email: emailFromQuery, action: meta.award })
+      });
+      const data = await response.json();
+      btn.disabled=false;
+
+      if (response.ok){
+        currentUserPoints = (data.newPoints!=null) ? data.newPoints : (currentUserPoints + (meta.points || 0));
+        updateAvailablePointsDisplay(currentUserPoints);
+        showNotification(`+${meta.points} points for ${meta.label}!`);
+        const msg = document.getElementById('award-message');
+        if (msg){ 
+          msg.textContent = `Thanks! You've been awarded ${meta.points} points. New total: ${currentUserPoints}.`; 
+          msg.style.color='var(--success)'; 
+          msg.style.display='block'; 
+        }
+        localStorage.setItem(localKey(meta.award),'1'); 
+        successLock(btn,row,`${meta.label} ✓`);
+      } else {
+        const msgText = data.error || data.message || 'Error awarding points.'; 
+        showNotification(msgText, true);
+        const msg = document.getElementById('award-message');
+        if (msg){ 
+          msg.textContent = msgText; 
+          msg.style.color='var(--error)'; 
+          msg.style.display='block'; 
+        }
+        if ((msgText||'').toLowerCase().includes('points already claimed')){
+          localStorage.setItem(localKey(meta.award),'1'); 
+          lockButton(btn,row);
+        } else { 
+          btn.innerHTML = original; 
+          btn.disabled=false; 
+        }
+      }
+    }catch(e){
+      btn.innerHTML = original; 
+      btn.disabled=false;
+      showNotification('Connection error.', true);
+      const msg = document.getElementById('award-message');
+      if (msg){ 
+        msg.textContent = 'Error connecting to referral service.'; 
+        msg.style.color='var(--error)'; 
+        msg.style.display='block'; 
+      }
+    }
+  });
+});
+
+  /* ---------- Auto-login helper (unchanged) ---------- */
+  function autoLoginShopify(email, password, returnTo){
+    const f = document.createElement('form'); f.method='POST'; f.action='/account/login'; f.style.display='none';
+    const e = Object.assign(document.createElement('input'), {type:'hidden', name:'customer[email]', value:email});
+    const p = Object.assign(document.createElement('input'), {type:'hidden', name:'customer[password]', value:password});
+    const r = Object.assign(document.createElement('input'), {type:'hidden', name:'return_to', value:returnTo||window.location.href});
+    f.appendChild(e); f.appendChild(p); f.appendChild(r); document.body.appendChild(f); f.submit();
+  }
+  (function attemptAutoLoginOnce(){
+    if (__isLoggedIn || !effectiveEmail) return;
+    const payloadKey = `autologin_payload:${effectiveEmail}`, attemptKey = `autologin_attempt:${effectiveEmail}`;
+    try{
+      const payload = JSON.parse(sessionStorage.getItem(payloadKey) || 'null');
+      const lastAttempt = Number(sessionStorage.getItem(attemptKey) || 0);
+      const fresh = payload && (Date.now() - payload.ts < 120000);
+      const cooled = !lastAttempt || (Date.now() - lastAttempt > 15000);
+      if (fresh && cooled){ sessionStorage.setItem(attemptKey, String(Date.now())); autoLoginShopify(effectiveEmail, payload.pw, window.location.href); }
+      sessionStorage.removeItem(payloadKey);
+    }catch(e){}
+  })();
+
+  /* ---------- Preserve email in links ---------- */
+  if (emailFromQuery){
+    const emailSignupLink = document.querySelector('a[href="/pages/email-signup"]');
+    const referralPageLink = document.querySelector('a[href="/pages/referral-page"]');
+    if (emailSignupLink) emailSignupLink.href = `/pages/email-signup?email=${encodeURIComponent(emailFromQuery)}`;
+    if (referralPageLink) referralPageLink.href = `/pages/referral-page?email=${encodeURIComponent(emailFromQuery)}`;
+  }
+
+  /* ---------- Initialize tier progress rail ---------- */
+  updateTierProgressRail();
+
+});
+</script>
+
+{% schema %}
+{
+  "name": "Rewards",
+  "settings": [
+    { "type": "number", "id": "referral_goal", "label": "Referral Goal", "default": 15 },
+
+    { "type": "header", "content": "Tier Progress" },
+    { "type": "text", "id": "tiers_heading", "label": "Tiers heading", "default": "Tiers" },
+
+    { "type": "header", "content": "FAQ" },
+    { "type": "text", "id": "faq_subheading", "label": "FAQ Subheading", "default": "Need help?" },
+    { "type": "text", "id": "faq_heading", "label": "FAQ Heading", "default": "Rewards FAQ" },
+    { "type": "richtext", "id": "faq_content", "label": "FAQ Intro Text", "default": "<p>Answers to common questions about points, rewards, and referrals.</p>" },
+
+    { "type": "header", "content": "FAQ colors" },
+    { "type": "color", "id": "faq_accordion_background", "label": "FAQ Accordion background" },
+    { "type": "color", "id": "faq_accordion_text_color", "label": "FAQ Accordion text" }
+  ],
+
+  "blocks": [
+    {
+      "type": "tier",
+      "name": "Tier",
+      "settings": [
+        { "type": "text", "id": "name", "label": "Tier name", "default": "BRONZE" },
+        { "type": "number", "id": "spend_threshold", "label": "Spend threshold (CAD)", "default": 0 },
+        { "type": "text", "id": "subtitle", "label": "Subtitle (e.g. Start here / Spend $350)", "default": "Start here" },
+        { "type": "text", "id": "points_per_dollar", "label": "Band text (e.g. 5 points per $1)", "default": "5 points per $1" },
+        { "type": "image_picker", "id": "icon", "label": "Tier icon" },
+        {
+          "type": "textarea",
+          "id": "perks",
+          "label": "Perks (one per line)",
+          "default": "Early access to new releases\n10% OFF first purchase + 50 points for signing up"
+        }
+      ]
+    },
+    {
+      "type": "milestone",
+      "name": "Milestone",
+      "settings": [
+        { "type": "number", "id": "milestone_count", "label": "Referral Count for Reward", "default": 5 },
+        { "type": "text", "id": "reward_name", "label": "Reward Name (e.g. Free Planner)", "default": "Free Notebook" },
+        { "type": "range", "id": "position", "label": "Progress Bar Position (%)", "min": 0, "max": 100, "step": 1, "default": 33 }
+      ]
+    },
+    {
+      "type": "faq_item",
+      "name": "FAQ Item",
+      "settings": [
+        { "type": "text", "id": "title", "label": "Question", "default": "How do I earn points?" },
+        { "type": "richtext", "id": "content", "label": "Answer", "default": "<p>You earn 5 points for every $1 spent, plus bonus points for social actions.</p>" }
+      ]
+    }
+  ],
+
+  "max_blocks": 30,
+
+  "presets": [
+    {
+      "name": "Rewards & Referrals (Starbucks)",
+      "category": "Custom",
+      "blocks": [
+        { "type": "tier" },
+        { "type": "tier" },
+        { "type": "tier" },
+        { "type": "tier" }
+      ]
+    }
+  ]
+}
+{% endschema %}

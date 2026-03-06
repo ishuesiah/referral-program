@@ -294,6 +294,9 @@ async function processPurchase({ email, orderTotal, orderId, discountCodes = [] 
     return { skipped: true, reason: 'Order already processed' };
   }
 
+  // Store previous tier for upgrade detection
+  const previousTier = user.tier || 'Bronze';
+
   // Check if first purchase
   const existingPurchases = await repo.findPurchaseActions(user.user_id);
   const isFirstPurchase = existingPurchases.length === 0;
@@ -319,6 +322,29 @@ async function processPurchase({ email, orderTotal, orderId, discountCodes = [] 
     actionRef: `order_${orderId}`
   });
 
+  // Check for tier upgrade and send Klaviyo email
+  const tierOrder = ['Bronze', 'Silver', 'Gold', 'VIP'];
+  const previousTierIndex = tierOrder.indexOf(previousTier);
+  const newTierIndex = tierOrder.indexOf(tier.name);
+
+  let tierUpgraded = false;
+  if (newTierIndex > previousTierIndex && newTierIndex >= 1) {
+    // User upgraded to Silver, Gold, or VIP - send Klaviyo email
+    tierUpgraded = true;
+    console.log(`Tier upgrade: ${email} upgraded from ${previousTier} to ${tier.name}`);
+
+    klaviyo.trackTierUpgrade(
+      email,
+      user.first_name || '',
+      previousTier,
+      tier.name,
+      totalSpent,
+      newPoints
+    ).catch(err => {
+      console.error('Klaviyo tier upgrade event error:', err);
+    });
+  }
+
   // Process used discount codes
   for (const discount of discountCodes) {
     const code = discount.code;
@@ -339,6 +365,8 @@ async function processPurchase({ email, orderTotal, orderId, discountCodes = [] 
     isFirstPurchase,
     referrerBonus,
     tier: tier.name,
+    previousTier,
+    tierUpgraded,
     totalSpent,
     pointsPerDollar: tier.pointsPerDollar
   };
@@ -441,6 +469,8 @@ module.exports = {
   createShopifyDiscountCode: shopify.createDiscountCode,
   deactivateShopifyDiscount: shopify.deactivateDiscount,
   subscribeToKlaviyo: klaviyo.subscribeToList,
+  trackKlaviyoEvent: klaviyo.trackEvent,
+  trackKlaviyoTierUpgrade: klaviyo.trackTierUpgrade,
   submitReview: judgeme.submitReview,
   fetchCustomerReviews: judgeme.fetchCustomerReviews,
 
