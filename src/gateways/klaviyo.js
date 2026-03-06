@@ -135,8 +135,18 @@ async function updateProfile(email, properties = {}) {
 }
 
 async function updateBirthday(email, birthday) {
-  // Klaviyo expects birthday in YYYY-MM-DD format
-  return updateProfile(email, { birthday: birthday });
+  // Extract month and day from the date (stored as 2000-MM-DD)
+  // Send to Klaviyo as MM-DD format
+  const date = new Date(birthday);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const monthDay = `${month}-${day}`;
+
+  return updateProfile(email, {
+    birthday_month: date.getMonth() + 1,
+    birthday_day: date.getDate(),
+    birthday: monthDay  // MM-DD format
+  });
 }
 
 /********************************************************************

@@ -276,17 +276,26 @@ app.post('/api/referral/redeem-milestone', async (req, res) => {
 // POST /api/referral/save-birthday
 app.post('/api/referral/save-birthday', async (req, res) => {
   try {
-    const { email, birthday } = req.body;
+    const { email, month, day } = req.body;
 
-    if (!email || !birthday) {
-      return res.status(400).json({ error: 'Email and birthday are required' });
+    if (!email || !month || !day) {
+      return res.status(400).json({ error: 'Email, month, and day are required' });
     }
 
-    // Validate birthday format (YYYY-MM-DD)
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(birthday)) {
-      return res.status(400).json({ error: 'Birthday must be in YYYY-MM-DD format' });
+    // Validate month (1-12) and day (1-31)
+    const monthNum = parseInt(month);
+    const dayNum = parseInt(day);
+
+    if (isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+      return res.status(400).json({ error: 'Invalid month' });
     }
+
+    if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) {
+      return res.status(400).json({ error: 'Invalid day' });
+    }
+
+    // Store with placeholder year 2000 (only month/day matter)
+    const birthday = `2000-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
 
     const result = await rewards.saveBirthday(email, birthday);
 
@@ -297,7 +306,8 @@ app.post('/api/referral/save-birthday', async (req, res) => {
     return res.json({
       success: true,
       message: 'Birthday saved successfully!',
-      birthday: result.birthday
+      month: monthNum,
+      day: dayNum
     });
   } catch (err) {
     console.error('Save birthday error:', err);
