@@ -454,6 +454,68 @@ async function createWelcomeDiscount(email) {
 }
 
 /********************************************************************
+ * Birthday Functions
+ ********************************************************************/
+async function saveBirthday(email, birthday) {
+  const user = await repo.findUserByEmail(email);
+  if (!user) {
+    return { success: false, error: 'User not found' };
+  }
+
+  // Save to database
+  await repo.updateUserBirthday(user.user_id, birthday);
+
+  // Sync to Klaviyo
+  klaviyo.updateBirthday(email, birthday).catch(err => {
+    console.error('Klaviyo birthday sync error:', err);
+  });
+
+  console.log(`Birthday saved for ${email}: ${birthday}`);
+  return { success: true, birthday };
+}
+
+async function processBirthdayPoints() {
+  // This function should be called by a daily cron job
+  const usersWithBirthday = await repo.getUsersWithBirthdayToday();
+  const results = [];
+
+  for (const user of usersWithBirthday) {
+    // Check if already awarded this year
+    const alreadyAwarded = await repo.hasBirthdayPointsThisYear(user.user_id);
+    if (alreadyAwarded) {
+      results.push({ email: user.email, status: 'skipped', reason: 'Already awarded this year' });
+      continue;
+    }
+
+    // Award birthday points
+    const birthdayPoints = config.BIRTHDAY_BONUS_POINTS;
+    const newPoints = user.points + birthdayPoints;
+
+    await repo.updateUserPointsById(user.user_id, newPoints);
+    await repo.createAction({
+      userId: user.user_id,
+      actionType: 'birthday_bonus',
+      pointsAwarded: birthdayPoints,
+      actionRef: `birthday_${new Date().getFullYear()}`
+    });
+
+    // Track event in Klaviyo for birthday email
+    klaviyo.trackEvent(user.email, 'Birthday Bonus', {
+      first_name: user.first_name,
+      points_awarded: birthdayPoints,
+      new_points: newPoints
+    }).catch(err => {
+      console.error('Klaviyo birthday event error:', err);
+    });
+
+    console.log(`Birthday points awarded to ${user.email}: ${birthdayPoints} points`);
+    results.push({ email: user.email, status: 'awarded', points: birthdayPoints });
+  }
+
+  return results;
+}
+
+/********************************************************************
  * Exports
  ********************************************************************/
 module.exports = {
@@ -483,5 +545,10 @@ module.exports = {
   processPurchase,
   processFirstPurchaseReferralBonus,
   processMilestoneRedeem,
-  createWelcomeDiscount
+  createWelcomeDiscount,
+
+  // Birthday
+  saveBirthday,
+  processBirthdayPoints,
+  updateKlaviyoBirthday: klaviyo.updateBirthday
 };

@@ -270,6 +270,65 @@ app.post('/api/referral/redeem-milestone', async (req, res) => {
 });
 
 /********************************************************************
+ * Birthday Routes
+ ********************************************************************/
+
+// POST /api/referral/save-birthday
+app.post('/api/referral/save-birthday', async (req, res) => {
+  try {
+    const { email, birthday } = req.body;
+
+    if (!email || !birthday) {
+      return res.status(400).json({ error: 'Email and birthday are required' });
+    }
+
+    // Validate birthday format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(birthday)) {
+      return res.status(400).json({ error: 'Birthday must be in YYYY-MM-DD format' });
+    }
+
+    const result = await rewards.saveBirthday(email, birthday);
+
+    if (!result.success) {
+      return res.status(404).json({ error: result.error });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Birthday saved successfully!',
+      birthday: result.birthday
+    });
+  } catch (err) {
+    console.error('Save birthday error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/cron/birthday-points (for daily cron job)
+app.post('/api/cron/birthday-points', async (req, res) => {
+  try {
+    const { secret } = req.body;
+
+    // Require secret for security
+    if (secret !== config.TEST_ENDPOINT_SECRET) {
+      return res.status(401).json({ error: 'Invalid secret' });
+    }
+
+    const results = await rewards.processBirthdayPoints();
+
+    return res.json({
+      success: true,
+      message: `Processed ${results.length} birthdays`,
+      results
+    });
+  } catch (err) {
+    console.error('Birthday points cron error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/********************************************************************
  * Shopify Webhook Routes
  ********************************************************************/
 

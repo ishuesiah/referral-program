@@ -100,10 +100,52 @@ async function trackTierUpgrade(email, firstName, previousTier, newTier, totalSp
 }
 
 /********************************************************************
+ * Update Profile Properties (for birthday, etc.)
+ ********************************************************************/
+async function updateProfile(email, properties = {}) {
+  const identifyUrl = 'https://a.klaviyo.com/api/identify';
+
+  const payload = {
+    token: config.KLAVIYO_PUBLIC_KEY,
+    properties: {
+      $email: email,
+      ...properties
+    }
+  };
+
+  try {
+    const response = await fetch(identifyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Klaviyo update profile error:', errorText);
+      return false;
+    }
+
+    console.log(`Klaviyo profile updated for ${email}`);
+    return true;
+  } catch (err) {
+    console.error('Klaviyo update profile failed:', err.message);
+    return false;
+  }
+}
+
+async function updateBirthday(email, birthday) {
+  // Klaviyo expects birthday in YYYY-MM-DD format
+  return updateProfile(email, { birthday: birthday });
+}
+
+/********************************************************************
  * Exports
  ********************************************************************/
 module.exports = {
   subscribeToList,
   trackEvent,
-  trackTierUpgrade
+  trackTierUpgrade,
+  updateProfile,
+  updateBirthday
 };

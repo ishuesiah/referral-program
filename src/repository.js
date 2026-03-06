@@ -140,6 +140,37 @@ async function updateUserTier(userId, tier, totalSpent) {
 }
 
 /********************************************************************
+ * Birthday Functions
+ ********************************************************************/
+async function updateUserBirthday(userId, birthday) {
+  await pool.query(
+    'UPDATE users SET birthday = $1 WHERE user_id = $2',
+    [birthday, userId]
+  );
+}
+
+async function getUsersWithBirthdayToday() {
+  // Find users whose birthday month and day match today
+  const result = await pool.query(`
+    SELECT * FROM users
+    WHERE birthday IS NOT NULL
+    AND EXTRACT(MONTH FROM birthday) = EXTRACT(MONTH FROM CURRENT_DATE)
+    AND EXTRACT(DAY FROM birthday) = EXTRACT(DAY FROM CURRENT_DATE)
+  `);
+  return result.rows;
+}
+
+async function hasBirthdayPointsThisYear(userId) {
+  const result = await pool.query(`
+    SELECT * FROM user_actions
+    WHERE user_id = $1
+    AND action_type = 'birthday_bonus'
+    AND EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM CURRENT_DATE)
+  `, [userId]);
+  return result.rows.length > 0;
+}
+
+/********************************************************************
  * Active Rewards (Multiple Discount Codes Support)
  ********************************************************************/
 async function getActiveRewards(userId) {
@@ -253,5 +284,10 @@ module.exports = {
   getActiveRewards,
   addActiveReward,
   removeActiveReward,
-  findActiveRewardByCode
+  findActiveRewardByCode,
+
+  // Birthday
+  updateUserBirthday,
+  getUsersWithBirthdayToday,
+  hasBirthdayPointsThisYear
 };

@@ -46,6 +46,7 @@ module.exports = {
   SIGNUP_POINTS: 50,
   REFERRER_SIGNUP_BONUS: 5,
   REFERRAL_BONUS_POINTS: 1500,  // $15 worth (awarded when referred user makes first purchase)
+  BIRTHDAY_BONUS_POINTS: 500,   // Points awarded on user's birthday
 
   /********************************************************************
    * Tier Configuration (based on total $ spent)
