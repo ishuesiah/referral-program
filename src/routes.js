@@ -339,6 +339,42 @@ app.post('/api/cron/birthday-points', async (req, res) => {
 });
 
 /********************************************************************
+ * Quiz Integration Routes
+ ********************************************************************/
+
+// POST /api/referral/quiz-completed
+app.post('/api/referral/quiz-completed', async (req, res) => {
+  try {
+    const { email, personalityType, quizResultId } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const result = await rewards.processQuizCompletion({
+      email,
+      personalityType,
+      quizResultId
+    });
+
+    return res.json({
+      success: true,
+      message: result.alreadyAwarded
+        ? 'Quiz points already awarded'
+        : `Awarded ${result.pointsAwarded} points for completing the quiz`,
+      pointsAwarded: result.pointsAwarded,
+      newPoints: result.newPoints,
+      alreadyAwarded: result.alreadyAwarded,
+      isNewUser: result.isNewUser,
+      referralCode: result.referralCode
+    });
+  } catch (err) {
+    console.error('Quiz completion error:', err);
+    return res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
+/********************************************************************
  * Shopify Webhook Routes
  ********************************************************************/
 
