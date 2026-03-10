@@ -69,7 +69,8 @@ module.exports = {
     'share': 5,
     'instagram': 5,
     'fb': 5,
-    'bonus': 5
+    'bonus': 5,
+    'quiz_completed': 250
   },
 
   /********************************************************************
@@ -96,6 +97,7 @@ module.exports = {
   CORS_ORIGINS: [
     'https://www.hemlockandoak.com',
     'https://hemlock-oak.myshopify.com',
+    'https://quiz.hemlockandoak.com',
     'http://127.0.0.1:9292',
     'http://localhost:9292',
     'http://localhost:3000'
