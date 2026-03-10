@@ -97,7 +97,7 @@ module.exports = {
   CORS_ORIGINS: [
     'https://www.hemlockandoak.com',
     'https://hemlock-oak.myshopify.com',
-    'https://quiz.hemlockandoak.com',
+    'https://quiz-1alit.sevalla.app',
     'http://127.0.0.1:9292',
     'http://localhost:9292',
     'http://localhost:3000'
