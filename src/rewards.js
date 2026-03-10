@@ -516,6 +516,68 @@ async function processBirthdayPoints() {
 }
 
 /********************************************************************
+ * Quiz Completion
+ ********************************************************************/
+async function processQuizCompletion({ email, personalityType, quizResultId }) {
+  // Check if user already exists
+  let user = await repo.findUserByEmail(email);
+  let isNewUser = false;
+
+  // Auto-enroll if user doesn't exist
+  if (!user) {
+    isNewUser = true;
+    const referralCode = generateReferralCode();
+
+    await repo.createUser({
+      firstName: '',  // Will be updated if they provide it later
+      email,
+      points: 0,      // Start with 0, quiz points added below
+      referralCode,
+      referredBy: null
+    });
+
+    user = await repo.findUserByEmail(email);
+    console.log(`Quiz: Auto-enrolled new user ${email} with referral code ${referralCode}`);
+  }
+
+  // Check if quiz points already awarded (prevent duplicates)
+  const existingQuizAction = await repo.findActionByUserAndType(user.user_id, 'quiz_completed');
+  if (existingQuizAction) {
+    console.log(`Quiz: ${email} already received quiz points, skipping`);
+    return {
+      success: true,
+      pointsAwarded: 0,
+      newPoints: user.points,
+      alreadyAwarded: true,
+      isNewUser: false
+    };
+  }
+
+  // Award quiz completion points
+  const quizPoints = config.ALLOWED_ACTIONS['quiz_completed'];
+  const newPoints = user.points + quizPoints;
+
+  await repo.updateUserPointsById(user.user_id, newPoints);
+  await repo.createAction({
+    userId: user.user_id,
+    actionType: 'quiz_completed',
+    pointsAwarded: quizPoints,
+    actionRef: `quiz_${quizResultId || 'unknown'}`
+  });
+
+  console.log(`Quiz: Awarded ${quizPoints} points to ${email} (personality: ${personalityType})`);
+
+  return {
+    success: true,
+    pointsAwarded: quizPoints,
+    newPoints,
+    alreadyAwarded: false,
+    isNewUser,
+    referralCode: user.referral_code
+  };
+}
+
+/********************************************************************
  * Exports
  ********************************************************************/
 module.exports = {
@@ -550,5 +612,8 @@ module.exports = {
   // Birthday
   saveBirthday,
   processBirthdayPoints,
-  updateKlaviyoBirthday: klaviyo.updateBirthday
+  updateKlaviyoBirthday: klaviyo.updateBirthday,
+
+  // Quiz
+  processQuizCompletion
 };
