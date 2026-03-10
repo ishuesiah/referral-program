@@ -129,10 +129,15 @@ app.get('/api/referral/user/:email', async (req, res) => {
     // Get active rewards (multiple discount codes)
     const activeRewards = await repo.getActiveRewards(user.user_id);
 
+    // Check if quiz has been completed
+    const quizAction = await repo.findActionByUserAndType(user.user_id, 'quiz_completed');
+    const quizCompleted = !!quizAction;
+
     return res.json({
       user: {
         ...user,
-        active_rewards: activeRewards
+        active_rewards: activeRewards,
+        quiz_completed: quizCompleted
       }
     });
   } catch (err) {
