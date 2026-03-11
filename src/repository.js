@@ -251,10 +251,23 @@ async function createAction({ userId, actionType, pointsAwarded, actionRef = nul
     expiration = sixMonthsFromNow.toISOString();
   }
 
-  await pool.query(
-    'INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref, expires_at) VALUES ($1, $2, $3, $4, $5)',
-    [userId, actionType, pointsAwarded, actionRef, expiration]
-  );
+  // Try with expires_at column first, fall back to old schema if column doesn't exist
+  try {
+    await pool.query(
+      'INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref, expires_at) VALUES ($1, $2, $3, $4, $5)',
+      [userId, actionType, pointsAwarded, actionRef, expiration]
+    );
+  } catch (err) {
+    if (err.message.includes('expires_at')) {
+      // Column doesn't exist yet, use old schema
+      await pool.query(
+        'INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref) VALUES ($1, $2, $3, $4)',
+        [userId, actionType, pointsAwarded, actionRef]
+      );
+    } else {
+      throw err;
+    }
+  }
 }
 
 /********************************************************************
