@@ -242,11 +242,100 @@ async function findPurchaseActions(userId) {
   return result.rows;
 }
 
-async function createAction({ userId, actionType, pointsAwarded, actionRef = null }) {
+async function createAction({ userId, actionType, pointsAwarded, actionRef = null, expiresAt = null }) {
+  // If no expiresAt provided and points are positive, default to 6 months from now
+  let expiration = expiresAt;
+  if (!expiration && pointsAwarded > 0) {
+    const sixMonthsFromNow = new Date();
+    sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
+    expiration = sixMonthsFromNow.toISOString();
+  }
+
   await pool.query(
-    'INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref) VALUES ($1, $2, $3, $4)',
-    [userId, actionType, pointsAwarded, actionRef]
+    'INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref, expires_at) VALUES ($1, $2, $3, $4, $5)',
+    [userId, actionType, pointsAwarded, actionRef, expiration]
   );
+}
+
+/********************************************************************
+ * Points Expiration Functions
+ ********************************************************************/
+
+// Calculate total non-expired points for a user
+async function calculateActivePoints(userId) {
+  const result = await pool.query(`
+    SELECT COALESCE(SUM(points_awarded), 0) as active_points
+    FROM user_actions
+    WHERE user_id = $1
+    AND (is_expired = FALSE OR is_expired IS NULL)
+    AND (expires_at IS NULL OR expires_at > NOW())
+  `, [userId]);
+  return parseInt(result.rows[0].active_points) || 0;
+}
+
+// Get actions that have expired but not yet processed
+async function getExpiredActions() {
+  const result = await pool.query(`
+    SELECT ua.*, u.email, u.first_name
+    FROM user_actions ua
+    JOIN users u ON ua.user_id = u.user_id
+    WHERE ua.expires_at IS NOT NULL
+    AND ua.expires_at <= NOW()
+    AND (ua.is_expired = FALSE OR ua.is_expired IS NULL)
+    AND ua.points_awarded > 0
+  `);
+  return result.rows;
+}
+
+// Mark actions as expired
+async function markActionsAsExpired(actionIds) {
+  if (!actionIds.length) return;
+  await pool.query(`
+    UPDATE user_actions
+    SET is_expired = TRUE
+    WHERE action_id = ANY($1)
+  `, [actionIds]);
+}
+
+// Get summary of expiring points for a user (for notifications)
+async function getExpiringPointsSummary(userId, daysAhead = 30) {
+  const result = await pool.query(`
+    SELECT
+      COALESCE(SUM(points_awarded), 0) as expiring_points,
+      MIN(expires_at) as earliest_expiration
+    FROM user_actions
+    WHERE user_id = $1
+    AND expires_at IS NOT NULL
+    AND expires_at <= NOW() + INTERVAL '${daysAhead} days'
+    AND expires_at > NOW()
+    AND (is_expired = FALSE OR is_expired IS NULL)
+    AND points_awarded > 0
+  `, [userId]);
+  return {
+    expiringPoints: parseInt(result.rows[0].expiring_points) || 0,
+    earliestExpiration: result.rows[0].earliest_expiration
+  };
+}
+
+// Set expiration date for all existing actions (for launch)
+async function setExpirationForExistingActions(expirationDate) {
+  const result = await pool.query(`
+    UPDATE user_actions
+    SET expires_at = $1
+    WHERE expires_at IS NULL
+    AND points_awarded > 0
+  `, [expirationDate]);
+  return result.rowCount;
+}
+
+// Recalculate and sync user's points based on non-expired actions
+async function syncUserPointsFromActions(userId) {
+  const activePoints = await calculateActivePoints(userId);
+  await pool.query(
+    'UPDATE users SET points = $1 WHERE user_id = $2',
+    [activePoints, userId]
+  );
+  return activePoints;
 }
 
 /********************************************************************
@@ -289,5 +378,13 @@ module.exports = {
   // Birthday
   updateUserBirthday,
   getUsersWithBirthdayToday,
-  hasBirthdayPointsThisYear
+  hasBirthdayPointsThisYear,
+
+  // Points Expiration
+  calculateActivePoints,
+  getExpiredActions,
+  markActionsAsExpired,
+  getExpiringPointsSummary,
+  setExpirationForExistingActions,
+  syncUserPointsFromActions
 };

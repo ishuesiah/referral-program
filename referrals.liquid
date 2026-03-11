@@ -914,6 +914,245 @@
   .your-rewards-section { padding: 20px 16px; }
 }
 
+/* ===================== Custom Confirm Modal ===================== */
+.confirm-modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+  justify-content: center;
+  align-items: center;
+}
+
+.confirm-modal-overlay.active {
+  display: flex;
+}
+
+.confirm-modal {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  max-width: 360px;
+  width: 90%;
+  overflow: hidden;
+}
+
+.confirm-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.confirm-modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--dark);
+  margin: 0;
+}
+
+.confirm-modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.confirm-modal-close:hover {
+  color: #666;
+}
+
+.confirm-modal-body {
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.confirm-modal-message {
+  font-size: 15px;
+  color: #666;
+  margin: 0;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #eee;
+}
+
+.confirm-modal-btn {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.confirm-modal-btn.cancel {
+  background: #f0f0f0;
+  color: var(--dark);
+}
+
+.confirm-modal-btn.cancel:hover {
+  background: #e5e5e5;
+}
+
+.confirm-modal-btn.confirm {
+  background: var(--primary);
+  color: #fff;
+}
+
+.confirm-modal-btn.confirm:hover {
+  background: #185a68;
+}
+
+/* ===================== Birthday Modal ===================== */
+.birthday-modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+  justify-content: center;
+  align-items: center;
+}
+
+.birthday-modal-overlay.active {
+  display: flex;
+}
+
+.birthday-modal {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  max-width: 380px;
+  width: 90%;
+  overflow: hidden;
+}
+
+.birthday-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.birthday-modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--dark);
+  margin: 0;
+}
+
+.birthday-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.birthday-modal-close:hover {
+  color: #666;
+}
+
+.birthday-modal-body {
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.birthday-modal-desc {
+  font-size: 14px;
+  color: #666;
+  margin: 0 0 20px;
+}
+
+.birthday-selects {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.birthday-select {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 16px;
+  font-family: inherit;
+  background: #fff;
+  cursor: pointer;
+}
+
+.birthday-select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.birthday-error {
+  color: var(--error);
+  font-size: 13px;
+  margin: 10px 0 0;
+}
+
+.birthday-modal-actions {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #eee;
+}
+
+.birthday-modal-btn {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.birthday-modal-btn.cancel {
+  background: #f0f0f0;
+  color: var(--dark);
+}
+
+.birthday-modal-btn.cancel:hover {
+  background: #e5e5e5;
+}
+
+.birthday-modal-btn.confirm {
+  background: var(--primary);
+  color: #fff;
+}
+
+.birthday-modal-btn.confirm:hover {
+  background: #185a68;
+}
+
+.birthday-saved {
+  color: var(--success);
+  font-size: 13px;
+}
+
 /* ===================== Unlock Rewards Section ===================== */
 .unlock-rewards-section {
   background: linear-gradient(135deg, #f5f5f3 0%, #efeee9 100%);
@@ -971,6 +1210,29 @@
   letter-spacing: 0.1em;
   color: #666;
   text-transform: uppercase;
+}
+
+/* Expiring Points Warning */
+.expiring-points-warning {
+  display: none;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #fff3e0;
+  border: 1px solid #ffb74d;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #e65100;
+  text-align: left;
+}
+.expiring-points-warning.visible {
+  display: block;
+}
+.expiring-points-warning svg {
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+  margin-right: 6px;
+  stroke: #e65100;
 }
 
 .unlock-box-referral {
@@ -1085,6 +1347,23 @@
 </style>
 
 <div class="account-referrals">
+  <!-- Custom Confirm Modal -->
+  <div class="confirm-modal-overlay" id="confirm-modal">
+    <div class="confirm-modal">
+      <div class="confirm-modal-header">
+        <h3 class="confirm-modal-title" id="confirm-modal-title">$5 voucher</h3>
+        <button class="confirm-modal-close" id="confirm-modal-close">&times;</button>
+      </div>
+      <div class="confirm-modal-body">
+        <p class="confirm-modal-message" id="confirm-modal-message">Redeem 500 points for this reward?</p>
+      </div>
+      <div class="confirm-modal-actions">
+        <button class="confirm-modal-btn cancel" id="confirm-modal-cancel">Not now</button>
+        <button class="confirm-modal-btn confirm" id="confirm-modal-confirm">Redeem</button>
+      </div>
+    </div>
+  </div>
+
   <div class="account-header">
     <div class="header-content">
       <span class="rewards-title"><img src="https://www.hemlockandoak.com/cdn/shop/files/lighter-logo-horizontal.png"> <h1 class="account-header-font">Rewards</h1></span>
@@ -1104,6 +1383,13 @@
       <div class="unlock-box unlock-box-points">
         <div class="unlock-points-number" id="available-points">0</div>
         <div class="unlock-points-label">AVAILABLE POINTS</div>
+        <div class="expiring-points-warning" id="expiring-points-warning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span id="expiring-points-text"></span>
+        </div>
       </div>
 
       <!-- Right Box: Referral -->
@@ -1338,8 +1624,73 @@
         <button class="earn-btn" data-action="youtube">Subscribe</button>
       </div>
     </div>
+
+    <!-- Birthday -->
+    <div class="earn-item" id="earning-birthday">
+      <div class="earn-item-left">
+        <span class="earn-check" id="birthday-check">○</span>
+        <span class="earn-label">Add your birthday</span>
+      </div>
+      <div class="earn-item-right">
+        <span class="points-badge">+500</span>
+        <button class="earn-btn" id="birthday-btn" data-action="birthday">Add</button>
+      </div>
+    </div>
+
+    <!-- Quiz -->
+    <div class="earn-item" id="earning-quiz">
+      <div class="earn-item-left">
+        <span class="earn-check" id="quiz-check">○</span>
+        <span class="earn-label">Take the personality quiz</span>
+      </div>
+      <div class="earn-item-right">
+        <span class="points-badge">+250</span>
+        <a href="https://quiz-1alit.sevalla.app" target="_blank" class="earn-link">Take Quiz →</a>
+      </div>
+    </div>
   </div>
-  
+
+  <!-- Birthday Modal -->
+  <div class="birthday-modal-overlay" id="birthday-modal">
+    <div class="birthday-modal">
+      <div class="birthday-modal-header">
+        <h3 class="birthday-modal-title">When's your birthday?</h3>
+        <button class="birthday-modal-close" id="birthday-modal-close">&times;</button>
+      </div>
+      <div class="birthday-modal-body">
+        <p class="birthday-modal-desc">We'll send you 500 bonus points on your special day!</p>
+        <div class="birthday-selects">
+          <select id="birthday-month" class="birthday-select">
+            <option value="">Month</option>
+            <option value="1">January</option>
+            <option value="2">February</option>
+            <option value="3">March</option>
+            <option value="4">April</option>
+            <option value="5">May</option>
+            <option value="6">June</option>
+            <option value="7">July</option>
+            <option value="8">August</option>
+            <option value="9">September</option>
+            <option value="10">October</option>
+            <option value="11">November</option>
+            <option value="12">December</option>
+          </select>
+          <select id="birthday-day" class="birthday-select">
+            <option value="">Day</option>
+            {% for i in (1..31) %}
+              <option value="{{ i }}">{{ i }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <p class="birthday-error" id="birthday-error" style="display: none;"></p>
+      </div>
+      <div class="birthday-modal-actions">
+        <button class="birthday-modal-btn cancel" id="birthday-cancel">Cancel</button>
+        <button class="birthday-modal-btn confirm" id="birthday-save">Save Birthday</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 </div>
 
@@ -1392,6 +1743,15 @@ document.addEventListener('DOMContentLoaded', function() {
   let emailFromQuery = urlParams.get('email');
   const customerEmail = "{{ customer.email | escape }}";
   if (!emailFromQuery && customerEmail && customerEmail !== "") emailFromQuery = customerEmail;
+
+  // Check if returning from quiz with completion flag
+  const quizCompleted = urlParams.get('quiz_completed');
+  if (quizCompleted === 'true' && emailFromQuery) {
+    localStorage.setItem(`quiz_completed:${emailFromQuery}`, '1');
+    // Clean up URL
+    const cleanUrl = window.location.pathname + (emailFromQuery ? `?email=${encodeURIComponent(emailFromQuery)}` : '');
+    window.history.replaceState({}, '', cleanUrl);
+  }
 
   const __isLoggedIn = {% if customer %}true{% else %}false{% endif %};
   const effectiveEmail = emailFromQuery || customerEmail;
@@ -1514,6 +1874,9 @@ function updateTierProgressRail(){
     element: m
   })).sort((a,b) => a.threshold - b.threshold);
 
+  // DEBUG: Log tier data to console
+  console.log('Tier Progress Debug:', { spend, tierData: tierData.map(t => ({ name: t.name, threshold: t.threshold })) });
+
   if (!tierData.length) return;
 
   const max = tierData[tierData.length - 1].threshold || 1;
@@ -1578,6 +1941,22 @@ function updateAvailablePointsDisplay(points){
     if(el) el.textContent = formattedPoints;
   });
   updatePointsRail(points); // Pass raw number to rail update
+}
+
+function updateExpiringPointsWarning(expiringPoints, expiringDate) {
+  const warningEl = document.getElementById('expiring-points-warning');
+  const textEl = document.getElementById('expiring-points-text');
+
+  if (!warningEl || !textEl) return;
+
+  if (expiringPoints && expiringPoints > 0 && expiringDate) {
+    const date = new Date(expiringDate);
+    const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    textEl.textContent = `${expiringPoints.toLocaleString()} points expiring ${formattedDate}`;
+    warningEl.classList.add('visible');
+  } else {
+    warningEl.classList.remove('visible');
+  }
 }
 
   /* ---------- Milestones init (referral) ---------- */
@@ -1800,6 +2179,10 @@ function updateAvailablePointsDisplay(points){
 
         updateReferralProgress(referralCount);
         updateAvailablePointsDisplay(currentUserPoints);
+
+        // Update expiring points warning
+        updateExpiringPointsWarning(data.user.expiring_points, data.user.expiring_date);
+
         // Update the referral count display
 const referralCountDisplay = document.getElementById('referral-count');
 if (referralCountDisplay) {
@@ -1854,6 +2237,52 @@ renderYourRewards(activeRewards);
             console.log('Could not fetch locked tiers:', e);
           }
 
+          // Check if user already has birthday set (API is source of truth)
+          const birthdayKey = `birthday_saved:${emailValue}`;
+          const birthdayRow = document.getElementById('earning-birthday');
+          const birthdayCheck = document.getElementById('birthday-check');
+          const birthdayBtn = document.getElementById('birthday-btn');
+
+          if (data.user.birthday) {
+            localStorage.setItem(birthdayKey, '1');
+            if (birthdayRow) birthdayRow.classList.add('claimed');
+            if (birthdayCheck) birthdayCheck.textContent = '✓';
+            if (birthdayBtn) {
+              birthdayBtn.textContent = 'Saved';
+              birthdayBtn.disabled = true;
+              birthdayBtn.style.background = '#999';
+              birthdayBtn.style.cursor = 'not-allowed';
+            }
+          } else {
+            // No birthday in DB - reset UI and clear localStorage
+            localStorage.removeItem(birthdayKey);
+            if (birthdayRow) birthdayRow.classList.remove('claimed');
+            if (birthdayCheck) birthdayCheck.textContent = '○';
+            if (birthdayBtn) {
+              birthdayBtn.textContent = 'Add';
+              birthdayBtn.disabled = false;
+              birthdayBtn.style.background = '';
+              birthdayBtn.style.cursor = '';
+            }
+          }
+
+          // Check if user already completed quiz (from API response)
+          const quizKey = `quiz_completed:${emailValue}`;
+          const quizRow = document.getElementById('earning-quiz');
+          const quizCheck = document.getElementById('quiz-check');
+          const quizLink = quizRow?.querySelector('.earn-link');
+
+          if (data.user.quiz_completed) {
+            localStorage.setItem(quizKey, '1');
+            if (quizRow) quizRow.classList.add('claimed');
+            if (quizCheck) quizCheck.textContent = '✓';
+            if (quizLink) {
+              quizLink.textContent = 'Completed';
+              quizLink.style.pointerEvents = 'none';
+              quizLink.style.opacity = '0.6';
+            }
+          }
+
           } else {
   // User not found in rewards program - try to auto-enroll them if logged in
   console.log('User not in rewards yet, checking if they have a Shopify account...');
@@ -1905,6 +2334,52 @@ renderYourRewards(activeRewards);
   }
   fetchReferralInfo(emailFromQuery);
 
+  /* ---------- Custom Confirm Modal ---------- */
+  function showConfirmModal(title, message) {
+    return new Promise((resolve) => {
+      const overlay = document.getElementById('confirm-modal');
+      const titleEl = document.getElementById('confirm-modal-title');
+      const messageEl = document.getElementById('confirm-modal-message');
+      const confirmBtn = document.getElementById('confirm-modal-confirm');
+      const cancelBtn = document.getElementById('confirm-modal-cancel');
+      const closeBtn = document.getElementById('confirm-modal-close');
+
+      titleEl.textContent = title;
+      messageEl.textContent = message;
+      overlay.classList.add('active');
+
+      function cleanup() {
+        overlay.classList.remove('active');
+        confirmBtn.removeEventListener('click', onConfirm);
+        cancelBtn.removeEventListener('click', onCancel);
+        closeBtn.removeEventListener('click', onCancel);
+        overlay.removeEventListener('click', onOverlayClick);
+      }
+
+      function onConfirm() {
+        cleanup();
+        resolve(true);
+      }
+
+      function onCancel() {
+        cleanup();
+        resolve(false);
+      }
+
+      function onOverlayClick(e) {
+        if (e.target === overlay) {
+          cleanup();
+          resolve(false);
+        }
+      }
+
+      confirmBtn.addEventListener('click', onConfirm);
+      cancelBtn.addEventListener('click', onCancel);
+      closeBtn.addEventListener('click', onCancel);
+      overlay.addEventListener('click', onOverlayClick);
+    });
+  }
+
   /* ---------- Redeem logic (unchanged IDs/classes) ---------- */
   function enableAllOptions(){
     document.querySelectorAll('.redeem-option').forEach(opt=>{ opt.classList.remove('disabled','selected'); });
@@ -1936,8 +2411,11 @@ renderYourRewards(activeRewards);
       return;
     }
 
-    // Show confirmation dialog
-    const confirmRedeem = confirm(`Are you sure you want to redeem ${requiredPoints} points for a ${redeemValue} discount? This action cannot be undone once the code is used.`);
+    // Show custom confirmation modal
+    const confirmRedeem = await showConfirmModal(
+      `${redeemValue} voucher`,
+      `Redeem ${requiredPoints.toLocaleString()} points for this reward?`
+    );
     if (!confirmRedeem) return;
 
     const original = btn.textContent;
@@ -1956,10 +2434,15 @@ renderYourRewards(activeRewards);
         })
       });
       const data = await response.json();
-      btn.innerHTML = original;
-      btn.disabled = false;
 
       if (response.ok) {
+        // Grey out button and show "Redeemed"
+        btn.innerHTML = 'Redeemed';
+        btn.disabled = true;
+        btn.style.background = '#999';
+        btn.style.cursor = 'not-allowed';
+        btn.style.pointerEvents = 'none';
+
         currentUserPoints = data.newPoints || 0;
         updateAvailablePointsDisplay(currentUserPoints);
         showNotification(`Success! Your ${redeemValue} discount code has been created. Check "Your Rewards" section below.`);
@@ -1990,6 +2473,9 @@ renderYourRewards(activeRewards);
           rewardsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       } else {
+        // Reset button on error
+        btn.innerHTML = original;
+        btn.disabled = false;
         redeemMessage.textContent = data.error || 'Error redeeming points.';
         redeemMessage.style.color = 'var(--error)';
         showNotification('Error redeeming points.', true);
@@ -2130,6 +2616,120 @@ document.querySelectorAll('.earn-btn[data-action]').forEach(btn=>{ // Fixed sele
   /* ---------- Initialize tier progress rail ---------- */
   updateTierProgressRail();
 
+  /* ---------- Birthday functionality ---------- */
+  const birthdayBtn = document.getElementById('birthday-btn');
+  const birthdayModal = document.getElementById('birthday-modal');
+  const birthdayClose = document.getElementById('birthday-modal-close');
+  const birthdayCancel = document.getElementById('birthday-cancel');
+  const birthdaySave = document.getElementById('birthday-save');
+  const birthdayMonth = document.getElementById('birthday-month');
+  const birthdayDay = document.getElementById('birthday-day');
+  const birthdayError = document.getElementById('birthday-error');
+  const birthdayRow = document.getElementById('earning-birthday');
+  const birthdayCheck = document.getElementById('birthday-check');
+
+  // Check if birthday already saved (from localStorage)
+  const birthdayKey = `birthday_saved:${emailFromQuery}`;
+  if (localStorage.getItem(birthdayKey) === '1') {
+    if (birthdayRow) birthdayRow.classList.add('claimed');
+    if (birthdayCheck) birthdayCheck.textContent = '✓';
+    if (birthdayBtn) {
+      birthdayBtn.textContent = 'Saved';
+      birthdayBtn.disabled = true;
+      birthdayBtn.style.background = '#999';
+      birthdayBtn.style.cursor = 'not-allowed';
+    }
+  }
+
+  function openBirthdayModal() {
+    if (birthdayModal) birthdayModal.classList.add('active');
+    if (birthdayError) birthdayError.style.display = 'none';
+  }
+
+  function closeBirthdayModal() {
+    if (birthdayModal) birthdayModal.classList.remove('active');
+    if (birthdayMonth) birthdayMonth.value = '';
+    if (birthdayDay) birthdayDay.value = '';
+    if (birthdayError) birthdayError.style.display = 'none';
+  }
+
+  if (birthdayBtn) {
+    birthdayBtn.addEventListener('click', openBirthdayModal);
+  }
+
+  if (birthdayClose) {
+    birthdayClose.addEventListener('click', closeBirthdayModal);
+  }
+
+  if (birthdayCancel) {
+    birthdayCancel.addEventListener('click', closeBirthdayModal);
+  }
+
+  if (birthdayModal) {
+    birthdayModal.addEventListener('click', (e) => {
+      if (e.target === birthdayModal) closeBirthdayModal();
+    });
+  }
+
+  if (birthdaySave) {
+    birthdaySave.addEventListener('click', async () => {
+      const month = birthdayMonth?.value;
+      const day = birthdayDay?.value;
+
+      if (!month || !day) {
+        if (birthdayError) {
+          birthdayError.textContent = 'Please select your birth month and day.';
+          birthdayError.style.display = 'block';
+        }
+        return;
+      }
+
+      const originalText = birthdaySave.textContent;
+      birthdaySave.innerHTML = '<span class="loading-indicator"></span> Saving...';
+      birthdaySave.disabled = true;
+
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/referral/save-birthday`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailFromQuery, month, day })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          localStorage.setItem(birthdayKey, '1');
+          closeBirthdayModal();
+          showNotification('Birthday saved! You\'ll receive 500 bonus points on your special day!');
+
+          // Update UI
+          if (birthdayRow) birthdayRow.classList.add('claimed');
+          if (birthdayCheck) birthdayCheck.textContent = '✓';
+          if (birthdayBtn) {
+            birthdayBtn.textContent = 'Saved';
+            birthdayBtn.disabled = true;
+            birthdayBtn.style.background = '#999';
+            birthdayBtn.style.cursor = 'not-allowed';
+          }
+        } else {
+          if (birthdayError) {
+            birthdayError.textContent = data.error || 'Error saving birthday.';
+            birthdayError.style.display = 'block';
+          }
+          birthdaySave.textContent = originalText;
+          birthdaySave.disabled = false;
+        }
+      } catch (err) {
+        if (birthdayError) {
+          birthdayError.textContent = 'Connection error. Please try again.';
+          birthdayError.style.display = 'block';
+        }
+        birthdaySave.textContent = originalText;
+        birthdaySave.disabled = false;
+      }
+    });
+  }
+
 });
 </script>
 
@@ -2196,10 +2796,10 @@ document.querySelectorAll('.earn-btn[data-action]').forEach(btn=>{ // Fixed sele
       "name": "Rewards & Referrals (Starbucks)",
       "category": "Custom",
       "blocks": [
-        { "type": "tier" },
-        { "type": "tier" },
-        { "type": "tier" },
-        { "type": "tier" }
+        { "type": "tier", "settings": { "name": "BRONZE", "spend_threshold": 0, "subtitle": "$0", "points_per_dollar": "5 points per $1" } },
+        { "type": "tier", "settings": { "name": "SILVER", "spend_threshold": 350, "subtitle": "$350", "points_per_dollar": "5 points per $1" } },
+        { "type": "tier", "settings": { "name": "GOLD", "spend_threshold": 750, "subtitle": "$750", "points_per_dollar": "7 points per $1" } },
+        { "type": "tier", "settings": { "name": "VIP", "spend_threshold": 2000, "subtitle": "$2000", "points_per_dollar": "10 points per $1" } }
       ]
     }
   ]

@@ -133,11 +133,16 @@ app.get('/api/referral/user/:email', async (req, res) => {
     const quizAction = await repo.findActionByUserAndType(user.user_id, 'quiz_completed');
     const quizCompleted = !!quizAction;
 
+    // Get expiring points summary (points expiring in next 30 days)
+    const expiringPoints = await repo.getExpiringPointsSummary(user.user_id, 30);
+
     return res.json({
       user: {
         ...user,
         active_rewards: activeRewards,
-        quiz_completed: quizCompleted
+        quiz_completed: quizCompleted,
+        expiring_points: expiringPoints.expiringPoints,
+        expiring_date: expiringPoints.earliestExpiration
       }
     });
   } catch (err) {
@@ -602,6 +607,137 @@ app.post('/api/test/klaviyo-tier-upgrade', async (req, res) => {
   } catch (err) {
     console.error('Test Klaviyo event error:', err);
     return res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
+/********************************************************************
+ * Milestone Routes
+ ********************************************************************/
+
+// GET /api/referral/redeemed-milestones
+app.get('/api/referral/redeemed-milestones', async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const user = await repo.findUserByEmail(email);
+    if (!user) {
+      return res.json({ redeemedMilestones: {} });
+    }
+
+    // Parse redeemed milestones from user's referal_discount_code field
+    let redeemedMilestones = {};
+    if (user.referal_discount_code) {
+      try {
+        redeemedMilestones = JSON.parse(user.referal_discount_code);
+      } catch (e) {
+        console.warn('Could not parse referal_discount_code:', e.message);
+      }
+    }
+
+    return res.json({ redeemedMilestones });
+  } catch (err) {
+    console.error('Fetch redeemed milestones error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/referral/expiring-points/:email
+app.get('/api/referral/expiring-points/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const daysAhead = parseInt(req.query.days) || 30;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const user = await repo.findUserByEmail(email);
+    if (!user) {
+      return res.json({ expiringPoints: 0, earliestExpiration: null });
+    }
+
+    const summary = await repo.getExpiringPointsSummary(user.user_id, daysAhead);
+    return res.json(summary);
+  } catch (err) {
+    console.error('Fetch expiring points error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/cron/expire-points (for daily cron job)
+app.post('/api/cron/expire-points', async (req, res) => {
+  try {
+    const { secret } = req.body;
+
+    // Require secret for security
+    if (secret !== config.TEST_ENDPOINT_SECRET) {
+      return res.status(401).json({ error: 'Invalid secret' });
+    }
+
+    const expiredActions = await repo.getExpiredActions();
+
+    if (expiredActions.length === 0) {
+      return res.json({ success: true, message: 'No expired points to process', actionsExpired: 0, usersAffected: 0 });
+    }
+
+    // Group by user
+    const userActions = {};
+    for (const action of expiredActions) {
+      if (!userActions[action.user_id]) {
+        userActions[action.user_id] = { actions: [], totalExpired: 0 };
+      }
+      userActions[action.user_id].actions.push(action);
+      userActions[action.user_id].totalExpired += action.points_awarded;
+    }
+
+    // Mark as expired
+    const actionIds = expiredActions.map(a => a.action_id);
+    await repo.markActionsAsExpired(actionIds);
+
+    // Update each user's balance
+    for (const userId of Object.keys(userActions)) {
+      await repo.syncUserPointsFromActions(parseInt(userId));
+    }
+
+    return res.json({
+      success: true,
+      message: `Processed ${actionIds.length} expired actions`,
+      actionsExpired: actionIds.length,
+      usersAffected: Object.keys(userActions).length
+    });
+  } catch (err) {
+    console.error('Expire points cron error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/referral/locked-tiers/:email
+app.get('/api/referral/locked-tiers/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const user = await repo.findUserByEmail(email);
+    if (!user) {
+      return res.json({ lockedTiers: [] });
+    }
+
+    // Determine which redemption tiers are locked based on user's tier
+    // For now, return empty array (no locked tiers)
+    // You can add logic here to lock certain redemption options based on tier
+    const lockedTiers = [];
+
+    return res.json({ lockedTiers });
+  } catch (err) {
+    console.error('Fetch locked tiers error:', err);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
