@@ -134,7 +134,13 @@ app.get('/api/referral/user/:email', async (req, res) => {
     const quizCompleted = !!quizAction;
 
     // Get expiring points summary (points expiring in next 30 days)
-    const expiringPoints = await repo.getExpiringPointsSummary(user.user_id, 30);
+    // Wrapped in try-catch in case migration hasn't been run yet
+    let expiringPoints = { expiringPoints: 0, earliestExpiration: null };
+    try {
+      expiringPoints = await repo.getExpiringPointsSummary(user.user_id, 30);
+    } catch (e) {
+      // Migration not run yet - columns don't exist, ignore
+    }
 
     return res.json({
       user: {
