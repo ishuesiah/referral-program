@@ -243,12 +243,12 @@ async function findPurchaseActions(userId) {
 }
 
 async function createAction({ userId, actionType, pointsAwarded, actionRef = null, expiresAt = null }) {
-  // If no expiresAt provided and points are positive, default to 6 months from now
+  // If no expiresAt provided and points are positive, default to 12 months from now
   let expiration = expiresAt;
   if (!expiration && pointsAwarded > 0) {
-    const sixMonthsFromNow = new Date();
-    sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
-    expiration = sixMonthsFromNow.toISOString();
+    const twelveMonthsFromNow = new Date();
+    twelveMonthsFromNow.setMonth(twelveMonthsFromNow.getMonth() + 12);
+    expiration = twelveMonthsFromNow.toISOString();
   }
 
   // Try with expires_at column first, fall back to old schema if column doesn't exist
