@@ -3,6 +3,7 @@
  * Database access layer - all SQL queries in one place
  ********************************************************************/
 const { Pool } = require('pg');
+const crypto = require('crypto');
 require('dotenv').config();
 
 // Initialize PostgreSQL pool (Neon)
@@ -30,6 +31,183 @@ async function getTableList() {
     WHERE table_schema = 'public'
   `);
   return result.rows.map(t => t.table_name);
+}
+
+/********************************************************************
+ * API Token Management
+ ********************************************************************/
+function generateApiToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+async function findUserByToken(token) {
+  if (!token) return null;
+  const result = await pool.query(
+    'SELECT * FROM users WHERE api_token = $1',
+    [token]
+  );
+  return result.rows[0] || null;
+}
+
+async function getOrCreateUserToken(userId) {
+  // Check if user already has a token
+  const userResult = await pool.query(
+    'SELECT api_token FROM users WHERE user_id = $1',
+    [userId]
+  );
+
+  if (userResult.rows[0]?.api_token) {
+    return userResult.rows[0].api_token;
+  }
+
+  // Generate and save new token
+  const token = generateApiToken();
+  await pool.query(
+    'UPDATE users SET api_token = $1 WHERE user_id = $2',
+    [token, userId]
+  );
+  return token;
+}
+
+async function validateUserToken(email, token) {
+  if (!token) return false;
+  const result = await pool.query(
+    'SELECT user_id FROM users WHERE email = $1 AND api_token = $2',
+    [email, token]
+  );
+  return result.rows.length > 0;
+}
+
+async function regenerateUserToken(userId) {
+  const token = generateApiToken();
+  await pool.query(
+    'UPDATE users SET api_token = $1 WHERE user_id = $2',
+    [token, userId]
+  );
+  return token;
+}
+
+/********************************************************************
+ * Atomic Transaction Helpers
+ ********************************************************************/
+async function redeemPointsAtomic({ userId, pointsToRedeem, actionType, actionRef = null }) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // Lock the user row and get current points
+    const lockResult = await client.query(
+      'SELECT points FROM users WHERE user_id = $1 FOR UPDATE',
+      [userId]
+    );
+
+    if (lockResult.rows.length === 0) {
+      throw new Error('User not found');
+    }
+
+    const currentPoints = lockResult.rows[0].points;
+
+    if (currentPoints < pointsToRedeem) {
+      throw new Error('Not enough points to redeem');
+    }
+
+    const newPoints = currentPoints - pointsToRedeem;
+
+    // Deduct points
+    await client.query(
+      'UPDATE users SET points = $1 WHERE user_id = $2',
+      [newPoints, userId]
+    );
+
+    // Calculate expiration (12 months from now)
+    const twelveMonthsFromNow = new Date();
+    twelveMonthsFromNow.setMonth(twelveMonthsFromNow.getMonth() + 12);
+
+    // Record the action
+    await client.query(
+      'INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref, expires_at) VALUES ($1, $2, $3, $4, $5)',
+      [userId, actionType, -pointsToRedeem, actionRef, twelveMonthsFromNow.toISOString()]
+    );
+
+    await client.query('COMMIT');
+
+    return { success: true, newPoints };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function awardPointsAtomic({ userId, points, actionType, actionRef = null }) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // Lock the user row
+    const lockResult = await client.query(
+      'SELECT points FROM users WHERE user_id = $1 FOR UPDATE',
+      [userId]
+    );
+
+    if (lockResult.rows.length === 0) {
+      throw new Error('User not found');
+    }
+
+    // Check for duplicate action if actionRef provided
+    if (actionRef) {
+      const existingAction = await client.query(
+        'SELECT action_id FROM user_actions WHERE user_id = $1 AND action_ref = $2',
+        [userId, actionRef]
+      );
+      if (existingAction.rows.length > 0) {
+        throw new Error('Action already processed');
+      }
+    }
+
+    // Check for duplicate action type (for one-time actions)
+    const oneTimeActions = ['quiz_completed', 'social_media_follow', 'community_join', 'facebook_like', 'youtube_subscribe'];
+    if (oneTimeActions.includes(actionType)) {
+      const existingTypeAction = await client.query(
+        'SELECT action_id FROM user_actions WHERE user_id = $1 AND action_type = $2',
+        [userId, actionType]
+      );
+      if (existingTypeAction.rows.length > 0) {
+        throw new Error('Points already claimed for this action');
+      }
+    }
+
+    const currentPoints = lockResult.rows[0].points;
+    const newPoints = currentPoints + points;
+
+    // Add points
+    await client.query(
+      'UPDATE users SET points = $1 WHERE user_id = $2',
+      [newPoints, userId]
+    );
+
+    // Calculate expiration (12 months from now)
+    const twelveMonthsFromNow = new Date();
+    twelveMonthsFromNow.setMonth(twelveMonthsFromNow.getMonth() + 12);
+
+    // Record the action
+    await client.query(
+      'INSERT INTO user_actions (user_id, action_type, points_awarded, action_ref, expires_at) VALUES ($1, $2, $3, $4, $5)',
+      [userId, actionType, points, actionRef, twelveMonthsFromNow.toISOString()]
+    );
+
+    await client.query('COMMIT');
+
+    return { success: true, newPoints, pointsAwarded: points };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /********************************************************************
@@ -359,6 +537,17 @@ module.exports = {
   pool,
   testConnection,
   getTableList,
+
+  // API Token Management
+  generateApiToken,
+  findUserByToken,
+  getOrCreateUserToken,
+  validateUserToken,
+  regenerateUserToken,
+
+  // Atomic Transactions
+  redeemPointsAtomic,
+  awardPointsAtomic,
 
   // Users
   findUserByEmail,

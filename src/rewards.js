@@ -106,23 +106,16 @@ async function processAwardPoints({ email, action }) {
     throw new Error('User not found');
   }
 
-  // Check if action already claimed
-  const existingAction = await repo.findActionByUserAndType(user.user_id, action);
-  if (existingAction) {
-    throw new Error('Points already claimed for this action');
-  }
-
   const pointsToAdd = config.ALLOWED_ACTIONS[action];
-  const newPoints = user.points + pointsToAdd;
 
-  await repo.updateUserPoints(email, newPoints);
-  await repo.createAction({
+  // Use atomic transaction to prevent race conditions
+  const result = await repo.awardPointsAtomic({
     userId: user.user_id,
-    actionType: action,
-    pointsAwarded: pointsToAdd
+    points: pointsToAdd,
+    actionType: action
   });
 
-  return { pointsAwarded: pointsToAdd, newPoints };
+  return { pointsAwarded: result.pointsAwarded, newPoints: result.newPoints };
 }
 
 async function processRedeem({ email, pointsToRedeem, redeemType, redeemValue }) {
@@ -131,24 +124,25 @@ async function processRedeem({ email, pointsToRedeem, redeemType, redeemValue })
     throw new Error('User not found');
   }
 
-  if (user.points < pointsToRedeem) {
-    throw new Error('Not enough points to redeem');
-  }
-
-  const newPoints = user.points - pointsToRedeem;
-
-  // Deduct points first
-  await repo.updateUserPointsById(user.user_id, newPoints);
-
-  // Log the redemption
-  await repo.createAction({
+  // Use atomic transaction to deduct points (prevents race conditions)
+  const actionType = `redeem-${redeemType || 'discount'}`;
+  const { newPoints } = await repo.redeemPointsAtomic({
     userId: user.user_id,
-    actionType: `redeem-${redeemType || 'discount'}`,
-    pointsAwarded: -pointsToRedeem
+    pointsToRedeem,
+    actionType
   });
 
-  // Create discount code
-  const { code, discountId } = await shopify.createDiscountCode(redeemValue, pointsToRedeem);
+  // Create discount code (external API call - if this fails, points are already deducted)
+  let code, discountId;
+  try {
+    const discountResult = await shopify.createDiscountCode(redeemValue, pointsToRedeem);
+    code = discountResult.code;
+    discountId = discountResult.discountId;
+  } catch (err) {
+    // If Shopify fails, we should ideally refund points, but for now log and rethrow
+    console.error('Shopify discount creation failed after points deducted:', err);
+    throw new Error('Failed to create discount code. Please contact support.');
+  }
 
   // Save discount code to user (legacy single-code field)
   await repo.updateUserDiscountCode(user.user_id, code, discountId, newPoints);

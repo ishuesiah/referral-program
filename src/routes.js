@@ -36,6 +36,49 @@ app.use(express.json({
 }));
 
 /********************************************************************
+ * Authentication Middleware
+ ********************************************************************/
+
+// Extract auth token from request (header or body)
+function getAuthToken(req) {
+  // Check Authorization header first (Bearer token)
+  const authHeader = req.get('Authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+  // Fall back to token in body or query
+  return req.body?.authToken || req.query?.authToken || null;
+}
+
+// Middleware to validate user authentication
+async function requireAuth(req, res, next) {
+  try {
+    const email = req.body?.email || req.params?.email || req.query?.email;
+    const token = getAuthToken(req);
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication token required' });
+    }
+
+    const isValid = await repo.validateUserToken(email, token);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
+
+    // Attach user info to request for downstream use
+    req.authenticatedEmail = email;
+    next();
+  } catch (err) {
+    console.error('Auth middleware error:', err);
+    return res.status(500).json({ error: 'Authentication error' });
+  }
+}
+
+/********************************************************************
  * Health Check Routes
  ********************************************************************/
 app.get('/', (req, res) => {
@@ -80,8 +123,8 @@ app.post('/api/referral/signup', async (req, res) => {
   }
 });
 
-// POST /api/referral/award
-app.post('/api/referral/award', async (req, res) => {
+// POST /api/referral/award (requires authentication)
+app.post('/api/referral/award', requireAuth, async (req, res) => {
   try {
     const { email, action } = req.body;
 
@@ -103,7 +146,7 @@ app.post('/api/referral/award', async (req, res) => {
     if (err.message === 'User not found') {
       return res.status(404).json({ error: err.message });
     }
-    if (err.message === 'Points already claimed for this action') {
+    if (err.message === 'Points already claimed for this action' || err.message === 'Action already processed') {
       return res.status(400).json({ error: err.message });
     }
     console.error('Award error:', err);
@@ -125,6 +168,9 @@ app.get('/api/referral/user/:email', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
     }
+
+    // Get or create API token for this user
+    const apiToken = await repo.getOrCreateUserToken(user.user_id);
 
     // Get active rewards (multiple discount codes)
     const activeRewards = await repo.getActiveRewards(user.user_id);
@@ -149,7 +195,8 @@ app.get('/api/referral/user/:email', async (req, res) => {
         quiz_completed: quizCompleted,
         expiring_points: expiringPoints.expiringPoints,
         expiring_date: expiringPoints.earliestExpiration
-      }
+      },
+      authToken: apiToken  // Token for authenticated API calls
     });
   } catch (err) {
     console.error('Fetch user error:', err);
@@ -157,8 +204,8 @@ app.get('/api/referral/user/:email', async (req, res) => {
   }
 });
 
-// POST /api/referral/redeem
-app.post('/api/referral/redeem', async (req, res) => {
+// POST /api/referral/redeem (requires authentication)
+app.post('/api/referral/redeem', requireAuth, async (req, res) => {
   try {
     const { email, pointsToRedeem, redeemType, redeemValue } = req.body;
 
@@ -190,8 +237,8 @@ app.post('/api/referral/redeem', async (req, res) => {
   }
 });
 
-// POST /api/referral/cancel-redeem
-app.post('/api/referral/cancel-redeem', async (req, res) => {
+// POST /api/referral/cancel-redeem (requires authentication)
+app.post('/api/referral/cancel-redeem', requireAuth, async (req, res) => {
   try {
     const { email, pointsToRefund, discountCode } = req.body;
 
@@ -257,8 +304,8 @@ app.post('/api/referral/create-welcome-discount', async (req, res) => {
   }
 });
 
-// POST /api/referral/redeem-milestone
-app.post('/api/referral/redeem-milestone', async (req, res) => {
+// POST /api/referral/redeem-milestone (requires authentication)
+app.post('/api/referral/redeem-milestone', requireAuth, async (req, res) => {
   try {
     const { email, milestonePoints } = req.body;
 
@@ -289,8 +336,8 @@ app.post('/api/referral/redeem-milestone', async (req, res) => {
  * Birthday Routes
  ********************************************************************/
 
-// POST /api/referral/save-birthday
-app.post('/api/referral/save-birthday', async (req, res) => {
+// POST /api/referral/save-birthday (requires authentication)
+app.post('/api/referral/save-birthday', requireAuth, async (req, res) => {
   try {
     const { email, month, day } = req.body;
 

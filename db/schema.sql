@@ -1,5 +1,4 @@
--- Neon PostgreSQL Schema for Referral Program
--- Run this in Neon SQL Editor to create the tables
+-- Supabase PostgreSQL Schema for Referral Program
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
@@ -12,15 +11,23 @@ CREATE TABLE IF NOT EXISTS users (
     referral_code VARCHAR(50) UNIQUE,
     referred_by VARCHAR(50),
     last_discount_code VARCHAR(50),
+    discount_code_id VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     membership_status VARCHAR(100),
     vip_tier_name VARCHAR(100),
     date_of_birth DATE,
-    referral_purchases_count INT DEFAULT 0,
-    discount_code_id VARCHAR(100),
+    birthday DATE,
+    tier VARCHAR(100),
+    total_spent DECIMAL(10,2) DEFAULT 0,
     referral_count INT DEFAULT 0,
-    referal_discount_code VARCHAR(100)
+    referral_purchases_count INT DEFAULT 0,
+    referal_discount_code TEXT,
+    active_rewards TEXT,
+    api_token VARCHAR(64) UNIQUE
 );
+
+-- Index for fast token lookups
+CREATE INDEX IF NOT EXISTS idx_users_api_token ON users(api_token);
 
 -- User actions table
 CREATE TABLE IF NOT EXISTS user_actions (
