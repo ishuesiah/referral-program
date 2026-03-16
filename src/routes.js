@@ -768,6 +768,59 @@ app.post('/api/cron/expire-points', async (req, res) => {
   }
 });
 
+// POST /api/cron/expiring-points-reminder (sends 14-day warning emails)
+app.post('/api/cron/expiring-points-reminder', async (req, res) => {
+  try {
+    const { secret } = req.body;
+
+    if (secret !== config.TEST_ENDPOINT_SECRET) {
+      return res.status(401).json({ error: 'Invalid secret' });
+    }
+
+    const DAYS_BEFORE_EXPIRY = 14;
+    const users = await repo.getUsersWithPointsExpiringInDays(DAYS_BEFORE_EXPIRY);
+
+    if (users.length === 0) {
+      return res.json({ success: true, message: 'No users with points expiring in 14 days', remindersSent: 0 });
+    }
+
+    let successCount = 0;
+    const klaviyo = require('./gateways/klaviyo');
+
+    for (const user of users) {
+      const expirationDate = new Date(user.expiration_date);
+      const formattedDate = expirationDate.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
+
+      try {
+        await klaviyo.trackEvent(user.email, 'Points Expiring Soon', {
+          first_name: user.first_name || 'there',
+          expiring_points: parseInt(user.expiring_points),
+          current_balance: user.points,
+          expiration_date: formattedDate,
+          days_until_expiry: DAYS_BEFORE_EXPIRY
+        });
+        successCount++;
+      } catch (err) {
+        console.error(`Failed to send reminder to ${user.email}:`, err.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Sent ${successCount} expiring points reminders`,
+      remindersSent: successCount,
+      totalUsers: users.length
+    });
+  } catch (err) {
+    console.error('Expiring points reminder cron error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // GET /api/referral/locked-tiers/:email
 app.get('/api/referral/locked-tiers/:email', async (req, res) => {
   try {

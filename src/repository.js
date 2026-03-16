@@ -529,6 +529,28 @@ async function syncUserPointsFromActions(userId) {
   return activePoints;
 }
 
+// Get users with points expiring in exactly X days (for reminder emails)
+async function getUsersWithPointsExpiringInDays(days) {
+  const result = await pool.query(`
+    SELECT
+      u.user_id,
+      u.email,
+      u.first_name,
+      u.points,
+      SUM(ua.points_awarded) as expiring_points,
+      MIN(ua.expires_at) as expiration_date
+    FROM users u
+    JOIN user_actions ua ON u.user_id = ua.user_id
+    WHERE ua.expires_at IS NOT NULL
+      AND ua.expires_at::date = (CURRENT_DATE + INTERVAL '${days} days')::date
+      AND (ua.is_expired = FALSE OR ua.is_expired IS NULL)
+      AND ua.points_awarded > 0
+    GROUP BY u.user_id, u.email, u.first_name, u.points
+    HAVING SUM(ua.points_awarded) > 0
+  `);
+  return result.rows;
+}
+
 /********************************************************************
  * Exports
  ********************************************************************/
@@ -588,5 +610,6 @@ module.exports = {
   markActionsAsExpired,
   getExpiringPointsSummary,
   setExpirationForExistingActions,
-  syncUserPointsFromActions
+  syncUserPointsFromActions,
+  getUsersWithPointsExpiringInDays
 };
