@@ -72,7 +72,7 @@ async function getOrCreateUserToken(userId) {
 async function validateUserToken(email, token) {
   if (!token) return false;
   const result = await pool.query(
-    'SELECT user_id FROM users WHERE email = $1 AND api_token = $2',
+    'SELECT user_id FROM users WHERE LOWER(email) = LOWER($1) AND api_token = $2',
     [email, token]
   );
   return result.rows.length > 0;
@@ -215,7 +215,7 @@ async function awardPointsAtomic({ userId, points, actionType, actionRef = null 
  ********************************************************************/
 async function findUserByEmail(email) {
   const result = await pool.query(
-    'SELECT * FROM users WHERE email = $1',
+    'SELECT * FROM users WHERE LOWER(email) = LOWER($1)',
     [email]
   );
   return result.rows[0] || null;
@@ -239,7 +239,7 @@ async function findUserByDiscountCode(discountCode) {
 
 async function findUserByEmailAndDiscountCode(email, discountCode) {
   const result = await pool.query(
-    'SELECT * FROM users WHERE email = $1 AND last_discount_code = $2',
+    'SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND last_discount_code = $2',
     [email, discountCode]
   );
   return result.rows[0] || null;
@@ -256,7 +256,7 @@ async function createUser({ firstName, email, points, referralCode, referredBy }
 
 async function updateUserPoints(email, newPoints) {
   await pool.query(
-    'UPDATE users SET points = $1 WHERE email = $2',
+    'UPDATE users SET points = $1 WHERE LOWER(email) = LOWER($2)',
     [newPoints, email]
   );
 }
@@ -284,7 +284,7 @@ async function updateUserDiscountCode(userId, discountCode, discountId, newPoint
 
 async function clearUserDiscountCode(email) {
   await pool.query(
-    'UPDATE users SET last_discount_code = NULL, discount_code_id = NULL WHERE email = $1',
+    'UPDATE users SET last_discount_code = NULL, discount_code_id = NULL WHERE LOWER(email) = LOWER($1)',
     [email]
   );
 }
@@ -417,6 +417,23 @@ async function findPurchaseActions(userId) {
      AND action_type IN ('purchase', 'test_purchase', 'shopify_purchase')`,
     [userId]
   );
+  return result.rows;
+}
+
+async function getUserActionHistory(userId) {
+  const result = await pool.query(`
+    SELECT
+      action_id,
+      action_type,
+      points_awarded,
+      created_at,
+      action_ref,
+      expires_at,
+      is_expired
+    FROM user_actions
+    WHERE user_id = $1
+    ORDER BY created_at DESC
+  `, [userId]);
   return result.rows;
 }
 
@@ -591,6 +608,7 @@ module.exports = {
   findActionByUserAndType,
   findActionByUserAndRef,
   findPurchaseActions,
+  getUserActionHistory,
   createAction,
 
   // Active Rewards (Multiple Discount Codes)

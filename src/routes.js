@@ -204,6 +204,66 @@ app.get('/api/referral/user/:email', async (req, res) => {
   }
 });
 
+// GET /api/referral/user/:email/actions - Get user's action history
+app.get('/api/referral/user/:email/actions', async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Missing email parameter.' });
+    }
+
+    const user = await repo.findUserByEmail(email);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    // Get full action history
+    const actions = await repo.getUserActionHistory(user.user_id);
+
+    // Format actions for display
+    const formattedActions = actions.map(action => ({
+      id: action.action_id,
+      type: action.action_type,
+      points: action.points_awarded,
+      date: action.created_at,
+      reference: action.action_ref,
+      expires_at: action.expires_at,
+      is_expired: action.is_expired || false
+    }));
+
+    // Calculate summary stats
+    const totalEarned = actions
+      .filter(a => a.points_awarded > 0)
+      .reduce((sum, a) => sum + a.points_awarded, 0);
+    const totalRedeemed = actions
+      .filter(a => a.points_awarded < 0)
+      .reduce((sum, a) => sum + Math.abs(a.points_awarded), 0);
+    const totalExpired = actions
+      .filter(a => a.is_expired && a.points_awarded > 0)
+      .reduce((sum, a) => sum + a.points_awarded, 0);
+
+    return res.json({
+      user: {
+        email: user.email,
+        name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unknown',
+        current_points: user.points
+      },
+      summary: {
+        total_earned: totalEarned,
+        total_redeemed: totalRedeemed,
+        total_expired: totalExpired,
+        current_balance: user.points
+      },
+      actions: formattedActions
+    });
+  } catch (err) {
+    console.error('Fetch user actions error:', err);
+    return res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
 // POST /api/referral/redeem (requires authentication)
 app.post('/api/referral/redeem', requireAuth, async (req, res) => {
   try {
